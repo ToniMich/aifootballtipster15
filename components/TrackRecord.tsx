@@ -12,7 +12,9 @@ const TrackRecord: React.FC<TrackRecordProps> = ({ history }) => {
     .filter(item => item.status === 'won' || item.status === 'lost')
     .slice(0, 10);
 
-  const getStatusColor = (status: 'won' | 'lost' | 'pending' | null) => {
+  // FIX: Widened the status type to include all possibilities from HistoryItem['status'].
+  // This resolves a TypeScript error where the type was not being correctly narrowed by the filter.
+  const getStatusColor = (status: 'won' | 'lost' | 'pending' | 'processing' | 'failed' | null) => {
     if (status === 'won') return { bg: 'bg-green-500', title: 'Win' };
     if (status === 'lost') return { bg: 'bg-red-500', title: 'Loss' };
     return { bg: 'bg-gray-400', title: 'Pending' };

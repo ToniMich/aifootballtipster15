@@ -32,9 +32,9 @@ const AccuracyTracker: React.FC<AccuracyTrackerProps> = ({ total, wins }) => {
             />
             <div className="h-4 w-px bg-gray-300 dark:bg-gray-600"></div>
             <StatItem 
-                icon={<ChartPieIcon className="h-5 w-5 text-yellow-500" />}
+                icon={<ChartPieIcon className="h-5 w-5 text-purple-500" />}
                 value={`${accuracy}%`}
-                label="Accuracy"
+                label="Prediction Accuracy"
             />
         </div>
     );

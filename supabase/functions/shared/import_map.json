@@ -1,0 +1,8 @@
+{
+  "imports": {
+    "jose/": "./deps.ts",
+    "@/": "../",
+    "cors": "./cors.ts",
+    "teamNameNormalizer": "./teamNameNormalizer.ts"
+  }
+}

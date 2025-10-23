@@ -1,10 +1,9 @@
-
-
 import React from 'react';
 import { PredictionResultData, BestBet, PlayerStat, GoalScorerPrediction } from '../types';
-import { ChartPieIcon, WarningIcon, LocationMarkerIcon, CalendarIcon, WhistleIcon, FireIcon, LightningBoltIcon, TableCellsIcon, TrophyIcon, AssistIcon, CardIcon } from './icons';
+import { ChartPieIcon, WarningIcon, LocationMarkerIcon, CalendarIcon, WhistleIcon, FireIcon, LightningBoltIcon, TableCellsIcon, TrophyIcon, AssistIcon, CardIcon, TicketIcon } from './icons';
 import TeamLogo from './TeamLogo';
 import SocialShare from './SocialShare';
+import GoalProbabilityChart from './GoalProbabilityChart';
 
 interface PredictionResultProps {
   result: PredictionResultData | null;
@@ -298,17 +297,24 @@ const PredictionResult: React.FC<PredictionResultProps> = ({ result, error, team
     return null;
   }
 
-  const { prediction, confidence, drawProbability, analysis, bestBets, keyStats, sources, availabilityFactors, venue, kickoffTime, referee, teamA_logo, teamB_logo, leagueContext, playerStats, goalScorerPredictions } = result;
+  const { prediction, confidence, drawProbability, analysis, bestBets, keyStats, sources, availabilityFactors, venue, kickoffTime, referee, teamA_logo, teamB_logo, leagueContext, playerStats, goalScorerPredictions, goalProbabilities, tally } = result as any;
   
   const hasSignificantAvailabilityNews = availabilityFactors && !availabilityFactors.toLowerCase().includes('no significant');
   const hasMatchDetails = venue || kickoffTime || referee;
   const hasLeagueContext = leagueContext && (leagueContext.leagueName || leagueContext.isDerby || leagueContext.isRivalry);
   const hasPlayerStats = playerStats && playerStats.length > 0;
   const hasGoalScorers = goalScorerPredictions && goalScorerPredictions.length > 0;
+  const hasGoalProbabilities = goalProbabilities && (goalProbabilities['0-1'] || goalProbabilities['2-3'] || goalProbabilities['4+']);
 
   return (
     <div className="mt-8 w-full animate-fade-in space-y-8">
-      <div className="bg-white dark:bg-gray-800/50 backdrop-blur-sm border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg p-6 sm:p-8 text-center">
+      <div className="relative bg-white dark:bg-gray-800/50 backdrop-blur-sm border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg p-6 sm:p-8 text-center">
+        {tally > 0 && (
+            <div className="absolute top-4 right-4 flex items-center gap-2 bg-gray-100 dark:bg-gray-900/60 px-3 py-1.5 rounded-full text-sm font-semibold text-gray-700 dark:text-gray-300 shadow-md" title={`${tally} users requested this prediction`}>
+                <TicketIcon className="h-5 w-5" />
+                <span>{tally}</span>
+            </div>
+        )}
         <div className="flex justify-around items-center mb-4">
             <div className="flex-1 flex items-center justify-start gap-3">
                 <TeamLogo logoUrl={teamA_logo} teamName={teamA} sizeClass="h-12 w-12" />
@@ -329,7 +335,7 @@ const PredictionResult: React.FC<PredictionResultProps> = ({ result, error, team
         <div className="mt-4 w-full max-w-xs mx-auto">
             <ConfidenceBar confidence={confidence} />
         </div>
-        <SocialShare result={result} teamA={teamA} teamB={teamB} />
+        <SocialShare result={result as PredictionResultData} teamA={teamA} teamB={teamB} />
       </div>
       
       {hasMatchDetails && (
@@ -438,6 +444,8 @@ const PredictionResult: React.FC<PredictionResultProps> = ({ result, error, team
           </div>
         </div>
       )}
+
+      {hasGoalProbabilities && <GoalProbabilityChart probabilities={goalProbabilities} />}
 
       <div className="bg-white dark:bg-gray-800/50 backdrop-blur-sm border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg p-6 sm:p-8">
         <div className="grid grid-cols-1 lg:grid-cols-3 lg:gap-x-8">

@@ -1,8 +1,3 @@
-
-
-
-
-
 export interface GroundingChunk {
   web: {
     uri: string;
@@ -54,6 +49,12 @@ export interface GoalScorerPrediction {
   reasoning: string;
 }
 
+export interface GoalProbabilities {
+  "0-1": string; // e.g. "25%"
+  "2-3": string; // e.g. "45%"
+  "4+": string; // e.g. "30%"
+}
+
 export interface PredictionResultData {
   prediction: string;
   confidence: string;
@@ -72,6 +73,7 @@ export interface PredictionResultData {
   leagueContext?: LeagueContext;
   playerStats?: PlayerStat[];
   goalScorerPredictions?: GoalScorerPrediction[];
+  goalProbabilities?: GoalProbabilities; // New field for goal chart
   fromCache?: boolean; // Flag to indicate if the result is from cache
 }
 
@@ -83,10 +85,10 @@ export interface HistoryItem extends PredictionResultData {
     teamB: string;
     timestamp: string; // Corresponds to the `created_at` field from the database
     matchCategory: 'men' | 'women';
-    status?: 'pending' | 'won' | 'lost' | null;
+    status?: 'pending' | 'won' | 'lost' | 'processing' | 'failed' | null;
+    tally: number;
 }
 
-// FIX: Add missing LiveMatch interface.
 export interface LiveMatch {
     id: string;
     league: string;
@@ -98,17 +100,6 @@ export interface LiveMatch {
     status: 'LIVE' | 'HT' | 'FT' | 'Not Started';
 }
 
-// FIX: Add missing SportsDBEvent interface.
-export interface SportsDBEvent {
-    idEvent: string;
-    strLeague: string;
-    strHomeTeam: string;
-    strAwayTeam: string;
-    intHomeScore: string | null;
-    intAwayScore: string | null;
-    strStatus: string | null;
-}
-
 // This type represents the raw data structure of a prediction
 // as it is stored in the Supabase 'predictions' table.
 export interface RawPrediction {
@@ -118,7 +109,8 @@ export interface RawPrediction {
     team_b: string;
     match_category: 'men' | 'women';
     prediction_data: PredictionResultData;
-    status: 'pending' | 'won' | 'lost' | null;
+    status: 'pending' | 'won' | 'lost' | 'processing' | 'failed' | null;
+    tally: number;
 }
 
 // This type defines the structure for the accuracy statistics object.

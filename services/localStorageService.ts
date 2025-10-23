@@ -1,28 +1,25 @@
-/**
- * Gets the current theme from localStorage.
- * Defaults to 'dark' if no theme is found.
- * @returns {'light' | 'dark'} The stored theme.
- */
-export const getTheme = (): 'light' | 'dark' => {
-    try {
-        const savedTheme = localStorage.getItem('theme');
-        if (savedTheme === 'light' || savedTheme === 'dark') {
-            return savedTheme;
-        }
-    } catch (e) {
-        console.error("Failed to read theme from localStorage", e);
-    }
-    return 'dark'; // Default theme
-};
+// FIX: Re-implementing theme functions to resolve module error and restore theme persistence.
+// The file was previously empty but was still being imported in App.tsx, causing a build error.
 
-/**
- * Saves the selected theme to localStorage.
- * @param {'light' | 'dark'} theme - The theme to save.
- */
-export const setTheme = (theme: 'light' | 'dark'): void => {
-    try {
-        localStorage.setItem('theme', theme);
-    } catch (e) {
-        console.error("Failed to save theme to localStorage", e);
+export function getTheme(): 'light' | 'dark' {
+    if (typeof window === 'undefined') {
+        return 'light';
     }
-};
+    
+    const storedTheme = localStorage.getItem('theme');
+    if (storedTheme === 'dark' || storedTheme === 'light') {
+        return storedTheme;
+    }
+    
+    if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+        return 'dark';
+    }
+
+    return 'light';
+}
+
+export function setTheme(theme: 'light' | 'dark'): void {
+    if (typeof window !== 'undefined') {
+        localStorage.setItem('theme', theme);
+    }
+}

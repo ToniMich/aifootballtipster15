@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useCallback } from 'react';
 import { LiveMatch } from '../types';
 import { RefreshIcon } from './icons';

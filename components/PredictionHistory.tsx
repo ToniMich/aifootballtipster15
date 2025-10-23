@@ -1,6 +1,6 @@
 import React from 'react';
 import { HistoryItem } from '../types';
-import { TrashIcon, TicketIcon, CheckCircleIcon, XMarkIcon } from './icons';
+import { TrashIcon, TicketIcon, CheckCircleIcon, XMarkIcon, RefreshIcon } from './icons';
 import TeamLogo from './TeamLogo';
 
 interface TicketCardProps {
@@ -25,12 +25,18 @@ const TicketCard: React.FC<TicketCardProps> = ({ item, onUpdateStatus, onSelect 
     return (
         <div 
             onClick={() => onSelect(item)}
-            className={`bg-white dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 rounded-lg p-4 shadow-md overflow-hidden transition-all duration-300 ${statusClasses[status]} cursor-pointer hover:shadow-xl hover:scale-[1.02]`}
+            className={`relative bg-white dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 rounded-lg p-4 shadow-md overflow-hidden transition-all duration-300 ${statusClasses[status]} cursor-pointer hover:shadow-xl hover:scale-[1.02]`}
             role="button"
             tabIndex={0}
             onKeyPress={(e) => (e.key === 'Enter' || e.key === ' ') && onSelect(item)}
             aria-label={`View details for prediction: ${item.teamA} vs ${item.teamB}`}
         >
+             {item.tally > 1 && (
+                <div className="absolute top-3 right-3 flex items-center gap-1.5 bg-gray-100 dark:bg-gray-900/50 px-2 py-0.5 rounded-full text-xs font-semibold text-gray-600 dark:text-gray-400" title={`${item.tally} requests`}>
+                    <TicketIcon className="h-3 w-3" />
+                    <span>{item.tally}</span>
+                </div>
+            )}
             <div className="flex flex-col sm:flex-row justify-between items-start gap-4">
                 <div className="flex-1">
                     <div className="flex items-center gap-3 flex-wrap">
@@ -98,9 +104,11 @@ interface PredictionHistoryProps {
     tickets: HistoryItem[];
     onUpdateStatus: (id: string, status: 'won' | 'lost') => void;
     onSelectTicket: (ticket: HistoryItem) => void;
+    onSync: () => void;
+    isSyncing: boolean;
 }
 
-const PredictionHistory: React.FC<PredictionHistoryProps> = ({ tickets, onUpdateStatus, onSelectTicket }) => {
+const PredictionHistory: React.FC<PredictionHistoryProps> = ({ tickets, onUpdateStatus, onSelectTicket, onSync, isSyncing }) => {
     return (
         <div className="w-full max-w-2xl animate-fade-in">
             <div className="flex justify-between items-center mb-4">
@@ -108,6 +116,15 @@ const PredictionHistory: React.FC<PredictionHistoryProps> = ({ tickets, onUpdate
                     <TicketIcon className="h-7 w-7 text-green-600 dark:text-green-300" />
                     <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Prediction History</h2>
                 </div>
+                <button
+                    onClick={onSync}
+                    disabled={isSyncing}
+                    className="flex items-center gap-2 px-3 py-1.5 text-sm font-semibold text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700/50 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-lg border border-gray-200 dark:border-gray-600 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+                    title="Check for match results and update statuses"
+                >
+                    <RefreshIcon className={`h-4 w-4 ${isSyncing ? 'animate-spin' : ''}`} />
+                    <span>{isSyncing ? 'Syncing...' : 'Sync Results'}</span>
+                </button>
             </div>
             {tickets.length > 0 ? (
                 <div className="space-y-4">

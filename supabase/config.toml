@@ -1,0 +1,28 @@
+project_id = "aifootballtipster15"
+
+[api]
+port = 54321
+
+[db]
+port = 54322
+
+[studio]
+port = 54323
+
+[functions.my-first-function]
+import_map = "functions/shared/import_map.json"
+
+[functions.my-second-function]
+import_map = "functions/shared/import_map.json"
+
+[functions.my-third-function]
+import_map = "functions/shared/import_map.json"
+
+[functions.my-fourth-function]
+import_map = "functions/shared/import_map.json"
+
+[functions.my-fifth-function]
+import_map = "functions/shared/import_map.json"
+
+[functions.my-sixth-function]
+import_map = "functions/shared/import_map.json"

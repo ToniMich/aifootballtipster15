@@ -1,5 +1,3 @@
-
-
 # AI Football Tipster ⚽️🔮
 
 **AI Football Tipster** is a sophisticated, AI-powered web application that provides detailed predictions and analyses for football matches. It leverages the power of Google's Gemini Pro model to deliver insights far beyond simple win/loss predictions, including key stats, tactical breakdowns, and data-driven betting tips.
@@ -14,6 +12,7 @@
 -   **⚡️ Live Scores**: Features a real-time sidebar with live scores from major matches around the world, powered by TheSportsDB API.
 -   **🗂️ Prediction History**: All predictions are saved to a Supabase database, allowing users to track a history of the AI's performance.
 -   **🎯 Accuracy Tracking**: Automatically calculates and displays the historical accuracy of winning predictions.
+-   ** Tally System**: Avoids duplicate predictions by tallying requests for the same match, saving API costs and showing popular predictions.
 -   ** toggler Dark & Light Mode**: A sleek, user-friendly theme toggle for comfortable viewing in any lighting.
 -   ** autocomplete Team Autocomplete**: An intuitive search that suggests team names as you type.
 -   **🔒 Secure & Scalable**: Built with a serverless architecture using Netlify Functions, ensuring API keys and sensitive logic are never exposed on the frontend.
@@ -33,10 +32,13 @@ The application follows a secure, serverless workflow:
 
 1.  **User Input**: The user enters two team names and selects a match category (Men's/Women's) on the React frontend.
 2.  **Secure API Call**: The request is sent to a secure Netlify Function (`/api/gemini-predict`).
-3.  **AI Analysis**: The function calls the Gemini Pro API with a detailed prompt and a required JSON schema.
-4.  **Structured Response**: Gemini analyzes the match and returns a structured JSON object containing the full prediction, stats, and analysis.
-5.  **Database Storage**: The Netlify Function then saves this complete prediction to the Supabase database.
-6.  **Display Results**: The newly saved record from the database is returned to the frontend and displayed to the user in a rich, interactive format.
+3.  **Cache Check**: The function first checks the Supabase database for a recent prediction (within 24 hours) for the same match.
+    -   **If found**, it increments a `tally` counter on the existing record and immediately returns the cached data.
+    -   **If not found**, it proceeds to the next step.
+4.  **AI Analysis**: The function calls the Gemini Pro API with a detailed prompt and a required JSON schema.
+5.  **Structured Response**: Gemini analyzes the match and returns a structured JSON object containing the full prediction, stats, and analysis.
+6.  **Database Storage**: The Netlify Function then saves this complete prediction to the Supabase database with a starting tally of 1.
+7.  **Display Results**: The new or cached record from the database is returned to the frontend and displayed to the user.
 
 ## 🚀 Getting Started (For Developers)
 
@@ -70,13 +72,14 @@ API_KEY="your_google_gemini_api_key"
 
 # Supabase Project Credentials
 # Get them from your Supabase project settings -> API
-SUPABASE_URL="your_supabase_project_url"
+# IMPORTANT: Use the variable name SUPABASE_DATABASE_URL, not SUPABASE_URL.
+SUPABASE_DATABASE_URL="your_supabase_project_url"
 SUPABASE_ANON_KEY="your_supabase_public_anon_key"
 SUPABASE_SERVICE_ROLE_KEY="your_supabase_service_role_key"
 
 # TheSportsDB API Key for Live Scores
 # Get it from: https://www.thesportsdb.com/user_reg.php
-THESPORTSDB_KEY="your_thesportsdb_api_key"
+THESPORTSDB_API_KEY="your_thesportsdb_api_key"
 ```
 
 ### 4. Set Up Supabase Database
@@ -95,6 +98,7 @@ CREATE TABLE public.predictions (
     match_category character varying NOT NULL DEFAULT 'men'::character varying,
     prediction_data jsonb,
     status character varying DEFAULT 'pending'::character varying,
+    tally integer NOT NULL DEFAULT 1,
     CONSTRAINT predictions_pkey PRIMARY KEY (id),
     CONSTRAINT predictions_status_check CHECK (((status)::text = ANY ((ARRAY['pending'::character varying, 'won'::character varying, 'lost'::character varying])::text[])))
 );
@@ -113,6 +117,13 @@ USING (true);
 -- ensures that the public can read data, but only the secure
 -- backend can write or modify it.
 ```
+
+4.  **Important: Refresh the Schema Cache**
+    After creating the table, you must tell Supabase to recognize the new schema.
+    - Go to the **API Docs** section in your Supabase project dashboard.
+    - Click on `predictions` in the sidebar.
+    - At the top of the page, you'll see a button to **Reload schema**. Click it.
+    - This step is critical to prevent "column not found" errors when the app tries to access new columns like `tally`.
 
 ### 5. Run the Project Locally
 

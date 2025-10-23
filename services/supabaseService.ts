@@ -16,29 +16,26 @@ const getConfig = (): Promise<any> => {
         return configPromise;
     }
 
-    // Create a new promise to fetch the configuration.
     configPromise = new Promise(async (resolve, reject) => {
         try {
             const response = await fetch('/api/get-config');
-            if (!response.ok) {
-                // Provide a specific, helpful error message for a 404 status.
-                if (response.status === 404) {
-                    throw new Error("Configuration endpoint not found at '/api/get-config'. Please ensure your Netlify serverless function is deployed correctly.");
-                }
-                // Handle other potential server errors.
-                let errorMsg = `Server responded with status ${response.status}`;
-                try {
-                    const errorBody = await response.json();
-                    errorMsg = errorBody.error || errorMsg;
-                } catch {
-                    // Ignore JSON parsing errors if the response body is not JSON.
-                }
-                throw new Error(errorMsg);
+            
+            const contentType = response.headers.get('content-type');
+            if (!contentType || !contentType.includes('application/json')) {
+                const responseText = await response.text();
+                console.error("Received non-JSON response from config endpoint:", responseText);
+                throw new Error(`[Configuration Error] Server returned an invalid response format. This could be a routing issue. Status: ${response.status}`);
             }
+
             const config = await response.json();
+            
+            if (!response.ok) {
+                const errorMessage = config.error || `Failed to fetch configuration. Status: ${response.status}`;
+                throw new Error(`[Configuration Error] ${errorMessage}`);
+            }
+
             resolve(config);
         } catch (error) {
-            // Reset the promise on failure to allow for a retry on the next call.
             configPromise = null;
             reject(error);
         }
@@ -57,10 +54,8 @@ const getSupabaseClient = (): Promise<SupabaseClient> => {
         return supabaseClientPromise;
     }
 
-    // Create a new promise to initialize Supabase.
     supabaseClientPromise = new Promise(async (resolve, reject) => {
         try {
-            // Use the shared getConfig function.
             const config = await getConfig();
 
             if (!config.supabaseUrl || !config.supabaseAnonKey) {
@@ -71,9 +66,8 @@ const getSupabaseClient = (): Promise<SupabaseClient> => {
             resolve(supabase);
         } catch (error) {
             console.error("Supabase initialization failed:", error);
-            // Reset the promise so that the next call can retry initialization.
             supabaseClientPromise = null;
-            reject(error);
+            reject(new Error(`Failed to initialize database client: ${error.message}`));
         }
     });
 
@@ -96,6 +90,8 @@ const mapPredictionToHistoryItem = (rawPrediction: RawPrediction): HistoryItem =
         matchCategory: rawPrediction.match_category,
         timestamp: rawPrediction.created_at, // Use created_at as the timestamp
         status: rawPrediction.status,
+        // FIX: Add missing 'tally' property to satisfy the HistoryItem type.
+        tally: rawPrediction.tally,
     };
 };
 

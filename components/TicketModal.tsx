@@ -1,6 +1,6 @@
 import React from 'react';
 import { HistoryItem } from '../types';
-import { FTLogoIcon, XMarkIcon, ChartPieIcon } from './icons';
+import { FTLogoIcon, XMarkIcon, ChartPieIcon, TicketIcon } from './icons';
 import SocialShare from './SocialShare';
 import TeamLogo from './TeamLogo';
 
@@ -29,11 +29,17 @@ const TicketModal: React.FC<TicketModalProps> = ({ ticket, onClose }) => {
                 onClick={e => e.stopPropagation()} // Prevent closing modal when clicking inside
             >
                 {/* Header */}
-                <div className="bg-gray-50 dark:bg-gray-900/50 p-4 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center">
+                <div className="relative bg-gray-50 dark:bg-gray-900/50 p-4 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center">
                     <div className="flex items-center gap-2">
                         <FTLogoIcon className="h-8 w-8" />
                         <h2 id="ticket-title" className="text-lg font-bold text-gray-800 dark:text-gray-200">Prediction Ticket</h2>
                     </div>
+                    {ticket.tally > 1 && (
+                        <div className="flex items-center gap-2 bg-gray-200 dark:bg-gray-700 px-3 py-1 rounded-full text-sm font-semibold text-gray-700 dark:text-gray-300" title={`${ticket.tally} requests`}>
+                            <TicketIcon className="h-5 w-5" />
+                            <span>{ticket.tally}</span>
+                        </div>
+                    )}
                     <button 
                         onClick={onClose} 
                         className="p-1 rounded-full text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-green-500"
