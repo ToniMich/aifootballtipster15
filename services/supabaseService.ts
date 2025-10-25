@@ -3,35 +3,68 @@ import { HistoryItem, RawPrediction, AccuracyStats, PredictionResultData } from 
 
 // Singleton Supabase client instance to avoid re-creating it.
 let supabaseClient: SupabaseClient | null = null;
+// Promise to ensure initialization only runs once.
+let initializePromise: Promise<void> | null = null;
 
 /**
- * Initializes the singleton Supabase client using environment variables.
- * This is the standard and most robust method for Vite applications.
- * @throws {Error} If the required VITE_SUPABASE_URL or VITE_SUPABASE_ANON_KEY are not set.
+ * Initializes the singleton Supabase client. It first tries to use environment variables,
+ * then falls back to fetching the configuration from the local Supabase instance
+ * during development, making the setup more resilient.
+ * @returns {Promise<void>} A promise that resolves when the client is initialized.
  */
-export const initializeSupabaseClient = (): void => {
+export const initializeSupabaseClient = (): Promise<void> => {
+    // If the client is already initialized or initialization is in progress, return the existing promise.
     if (supabaseClient) {
-        return;
+        return Promise.resolve();
     }
-    
-    // Safely access Vite environment variables.
-    const env = (import.meta as any).env;
-
-    // Check if the env object or the specific keys are missing.
-    if (!env || !env.VITE_SUPABASE_URL || !env.VITE_SUPABASE_ANON_KEY) {
-        // This specific error message is caught by App.tsx to display setup instructions.
-        throw new Error('[Configuration Error] Supabase URL/Key missing. Please set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in your .env.local file.');
+    if (initializePromise) {
+        return initializePromise;
     }
 
-    const supabaseUrl = env.VITE_SUPABASE_URL;
-    const supabaseAnonKey = env.VITE_SUPABASE_ANON_KEY;
+    initializePromise = (async () => {
+        try {
+            const env = (import.meta as any).env;
+            let supabaseUrl = env.VITE_SUPABASE_URL;
+            let supabaseAnonKey = env.VITE_SUPABASE_ANON_KEY;
 
-    try {
-        supabaseClient = createClient(supabaseUrl, supabaseAnonKey);
-    } catch (error) {
-        console.error("Supabase client initialization failed:", error);
-        throw new Error(`Failed to create Supabase client: ${error.message}`);
-    }
+            // If environment variables are not set in development, try fetching from the local dev server.
+            // This makes local setup smoother, as only `supabase start` is required for the frontend to connect.
+            if ((!supabaseUrl || !supabaseAnonKey) && env.DEV) {
+                console.log("VITE_SUPABASE vars not found. Attempting to fetch config from local Supabase instance...");
+                const localConfigUrl = 'http://127.0.0.1:54321/functions/v1/get-config';
+                try {
+                    const response = await fetch(localConfigUrl);
+                    if (!response.ok) {
+                        throw new Error(`Local config server responded with status ${response.status}`);
+                    }
+                    const config = await response.json();
+                    if (config.supabaseUrl && config.supabaseAnonKey) {
+                        supabaseUrl = config.supabaseUrl;
+                        supabaseAnonKey = config.supabaseAnonKey;
+                        console.log("Successfully fetched config from local Supabase instance.");
+                    } else {
+                        throw new Error("Invalid config object received from local server.");
+                    }
+                } catch (fetchError) {
+                    console.warn("Could not fetch config from local Supabase instance. Please ensure it's running via `supabase start`.", fetchError);
+                    // Proceed to the final check, which will likely fail and show the setup instructions.
+                }
+            }
+
+            if (!supabaseUrl || !supabaseAnonKey) {
+                throw new Error('[Configuration Error] Supabase URL/Key missing. Please set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in your .env.local file, or ensure `supabase start` is running correctly.');
+            }
+            
+            supabaseClient = createClient(supabaseUrl, supabaseAnonKey);
+
+        } catch (error) {
+            console.error("Supabase client initialization failed:", error);
+            initializePromise = null; // Allow retries on subsequent calls
+            throw error; // Re-throw to be caught by the App component
+        }
+    })();
+
+    return initializePromise;
 };
 
 /**
@@ -41,7 +74,7 @@ export const initializeSupabaseClient = (): void => {
  */
 export const getSupabaseClient = (): SupabaseClient => {
     if (!supabaseClient) {
-        throw new Error('Supabase client has not been initialized. Call initializeSupabaseClient first.');
+        throw new Error('Supabase client has not been initialized. Call initializeSupabaseClient and await its result first.');
     }
     return supabaseClient;
 };

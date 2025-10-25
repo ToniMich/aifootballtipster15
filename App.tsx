@@ -86,8 +86,9 @@ const App: React.FC = () => {
     useEffect(() => {
         const initializeApp = async () => {
             try {
-                // Step 1: Initialize the Supabase client synchronously using environment variables.
-                initializeSupabaseClient();
+                // Step 1: Asynchronously initialize the Supabase client.
+                // This now handles fetching config from a local server if .env vars are missing.
+                await initializeSupabaseClient();
                 
                 // Step 2: Once the client is ready, fetch the initial data.
                 await refreshData();
