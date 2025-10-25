@@ -108,7 +108,8 @@ export interface RawPrediction {
     team_a: string;
     team_b: string;
     match_category: 'men' | 'women';
-    prediction_data: PredictionResultData;
+    // FIX: Make this partial to reflect that data is not always complete (e.g., during 'processing' or 'failed' states).
+    prediction_data: Partial<PredictionResultData> & { error?: string };
     status: 'pending' | 'won' | 'lost' | 'processing' | 'failed' | null;
     tally: number;
 }

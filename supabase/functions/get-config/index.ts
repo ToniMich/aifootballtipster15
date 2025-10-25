@@ -1,7 +1,7 @@
 // supabase/functions/get-config/index.ts
 
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts'
-import { corsHeaders } from '../shared/cors.ts'
+import { corsHeaders } from '../_shared/cors.ts'
 
 // Fix for "Cannot find name 'Deno'" error in Supabase Edge Functions.
 declare const Deno: any;
@@ -13,12 +13,13 @@ serve(async (req: Request) => {
   }
 
   try {
-    // These variables need to be set in the Supabase project's environment variables settings.
-    const supabaseUrl = Deno.env.get('VITE_SUPABASE_URL') || Deno.env.get('SUPABASE_URL')
-    const supabaseAnonKey = Deno.env.get('VITE_SUPABASE_ANON_KEY') || Deno.env.get('SUPABASE_ANON_KEY')
+    // These variables are automatically injected by the Supabase CLI locally
+    // and are set as environment variables in your production project.
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')
+    const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY')
 
     if (!supabaseUrl || !supabaseAnonKey) {
-      console.error('Configuration Error: VITE_SUPABASE_URL or VITE_SUPABASE_ANON_KEY are not set in the Edge Function environment.');
+      console.error('Configuration Error: SUPABASE_URL or SUPABASE_ANON_KEY are not set in the Edge Function environment.');
       throw new Error('[Configuration Error] The public Supabase credentials are not configured on the server.');
     }
 

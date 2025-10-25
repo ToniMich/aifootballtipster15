@@ -1,7 +1,7 @@
 // supabase/functions/fetch-scores/index.ts
 
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts'
-import { corsHeaders } from "../shared/cors.ts";
+import { corsHeaders } from '../_shared/cors.ts'
 
 // Fix for "Cannot find name 'Deno'" error in Supabase Edge Functions.
 declare const Deno: any;

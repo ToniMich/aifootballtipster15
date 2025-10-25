@@ -96,13 +96,14 @@ serve(async (req: Request) => {
         const ai = new GoogleGenAI({ apiKey: apiKey });
         const supabase = createClient(supabaseUrl, serviceRoleKey);
 
-        const prompt = `You are a world-class football analyst. Analyze the upcoming ${matchCategory}'s soccer match between ${teamA} and ${teamB}. Use Google Search extensively to find the most current and relevant information, including team news, form, historical data, injuries, suspensions, league context (table position, rivalries), and key player statistics. Your response must be a single, valid JSON object that strictly adheres to the provided schema. Populate all fields with accurate, well-researched data. Do not include any text, markdown, or any other content outside of the JSON object itself.`;
+        // FIX: Removed "Use Google Search extensively" from the prompt as the `googleSearch` tool is incompatible with `responseSchema`.
+        const prompt = `You are a world-class football analyst. Analyze the upcoming ${matchCategory}'s soccer match between ${teamA} and ${teamB}. Provide the most current and relevant information possible, including team news, form, historical data, injuries, suspensions, league context (table position, rivalries), and key player statistics. Your response must be a single, valid JSON object that strictly adheres to the provided schema. Populate all fields with accurate, well-researched data. Do not include any text, markdown, or any other content outside of the JSON object itself.`;
 
         const response = await ai.models.generateContent({
             model: "gemini-2.5-flash",
             contents: prompt,
             config: {
-                tools: [{ googleSearch: {} }],
+                // FIX: Removed `tools: [{ googleSearch: {} }]` as it's incompatible with `responseSchema` and `responseMimeType: "application/json"`.
                 responseMimeType: "application/json",
                 responseSchema: predictionSchema
             },

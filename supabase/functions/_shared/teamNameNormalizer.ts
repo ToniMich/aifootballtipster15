@@ -1,4 +1,4 @@
-// supabase/functions/shared/teamNameNormalizer.ts
+// supabase/functions/_shared/teamNameNormalizer.ts
 
 /**
  * This file contains the logic for standardizing team names.

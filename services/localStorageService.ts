@@ -3,19 +3,17 @@
 
 export function getTheme(): 'light' | 'dark' {
     if (typeof window === 'undefined') {
-        return 'light';
+        return 'dark';
     }
     
     const storedTheme = localStorage.getItem('theme');
-    if (storedTheme === 'dark' || storedTheme === 'light') {
-        return storedTheme;
+    // If the user has explicitly chosen light, use it.
+    if (storedTheme === 'light') {
+        return 'light';
     }
     
-    if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
-        return 'dark';
-    }
-
-    return 'light';
+    // Otherwise, default to dark. This covers cases where the theme is 'dark' or not set at all.
+    return 'dark';
 }
 
 export function setTheme(theme: 'light' | 'dark'): void {

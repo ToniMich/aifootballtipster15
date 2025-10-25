@@ -15,126 +15,205 @@
 -   ** Tally System**: Avoids duplicate predictions by tallying requests for the same match, saving API costs and showing popular predictions.
 -   ** toggler Dark & Light Mode**: A sleek, user-friendly theme toggle for comfortable viewing in any lighting.
 -   ** autocomplete Team Autocomplete**: An intuitive search that suggests team names as you type.
--   **🔒 Secure & Scalable**: Built with a serverless architecture using Netlify Functions, ensuring API keys and sensitive logic are never exposed on the frontend.
+-   **🔒 Secure & Scalable**: Built with a serverless architecture using Supabase Edge Functions, ensuring API keys and sensitive logic are never exposed on the frontend.
 
-## 🛠️ Tech Stack
+## 🛠️ Tech Stack & Architecture
 
 -   **Frontend**: React, TypeScript, Vite, Tailwind CSS
--   **Backend**: Netlify Functions (Serverless Node.js)
+-   **Backend**: Supabase Edge Functions (Serverless Deno)
 -   **AI Model**: Google Gemini Pro
 -   **Database**: Supabase (PostgreSQL)
 -   **Live Scores API**: TheSportsDB
--   **Hosting**: Netlify
-
-## ⚙️ How It Works
-
-The application follows a secure, serverless workflow:
-
-1.  **User Input**: The user enters two team names and selects a match category (Men's/Women's) on the React frontend.
-2.  **Secure API Call**: The request is sent to a secure Netlify Function (`/api/gemini-predict`).
-3.  **Cache Check**: The function first checks the Supabase database for a recent prediction (within 24 hours) for the same match.
-    -   **If found**, it increments a `tally` counter on the existing record and immediately returns the cached data.
-    -   **If not found**, it proceeds to the next step.
-4.  **AI Analysis**: The function calls the Gemini Pro API with a detailed prompt and a required JSON schema.
-5.  **Structured Response**: Gemini analyzes the match and returns a structured JSON object containing the full prediction, stats, and analysis.
-6.  **Database Storage**: The Netlify Function then saves this complete prediction to the Supabase database with a starting tally of 1.
-7.  **Display Results**: The new or cached record from the database is returned to the frontend and displayed to the user.
 
 ## 🚀 Getting Started (For Developers)
 
-Follow these instructions to set up and run the project locally.
+**IMPORTANT**: All `supabase` CLI commands in this guide **must be run from the project's root directory** (the `aifootballtipster` folder), not from inside the `supabase` sub-directory.
 
-### 1. Clone the Repository
+Follow these instructions to set up and run the project locally. This project requires two separate processes: the Vite server for the frontend and the Supabase server for the backend functions.
+
+### 1. Prerequisites
+
+-   Install [Node.js](https://nodejs.org/) (which includes npm).
+-   Install the [Supabase CLI](https://supabase.com/docs/guides/cli/getting-started).
+-   Install and run [Docker Desktop](https://www.docker.com/products/docker-desktop/).
+
+### 2. Clone & Install Dependencies
 
 ```bash
+# Clone the repository
 git clone https://github.com/your-username/ai-football-tipster.git
 cd ai-football-tipster
-```
 
-### 2. Install Dependencies
-
-```bash
+# Install frontend dependencies
 npm install
+
+# (First time only) Log in to the Supabase CLI
+supabase login
 ```
 
 ### 3. Set Up Environment Variables
 
-This project uses Netlify Functions, which rely on environment variables. You will need API keys from Google, Supabase, and TheSportsDB.
+This project uses a single `.env.local` file in the root directory for both the frontend (Vite) and backend (Supabase Functions).
 
-Create a `.env` file in the root of the project and add the following variables:
+**First, start Supabase to get your local keys:**
+```bash
+# This command starts the local Supabase database and functions.
+# It will print your local API URL and keys in the terminal.
+supabase start
+```
+After running the command, look for the following output in your terminal:
+```
+API URL: http://127.0.0.1:54321
+...
+anon key: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+```
+You will need these two values for the next step. Keep the `supabase start` process running.
+
+**Next, create your `.env.local` file:**
+In a new terminal, create a file named `.env.local` in the project root and add the following, replacing the placeholder values with the ones from the `supabase start` output and your personal API keys.
 
 ```
-# .env
+# .env.local
 
-# Google Gemini API Key
+# Supabase credentials for the frontend (from `supabase start` output)
+VITE_SUPABASE_URL="http://127.0.0.1:54321"
+VITE_SUPABASE_ANON_KEY="your_local_anon_key_from_the_terminal"
+
+# Google Gemini API Key for AI Predictions
 # Get it from Google AI Studio: https://aistudio.google.com/app/apikey
 API_KEY="your_google_gemini_api_key"
-
-# Supabase Project Credentials
-# Get them from your Supabase project settings -> API
-# IMPORTANT: Use the variable name SUPABASE_DATABASE_URL, not SUPABASE_URL.
-SUPABASE_DATABASE_URL="your_supabase_project_url"
-SUPABASE_ANON_KEY="your_supabase_public_anon_key"
-SUPABASE_SERVICE_ROLE_KEY="your_supabase_service_role_key"
 
 # TheSportsDB API Key for Live Scores
 # Get it from: https://www.thesportsdb.com/user_reg.php
 THESPORTSDB_API_KEY="your_thesportsdb_api_key"
 ```
 
-### 4. Set Up Supabase Database
+### 4. Set Up the Database
 
-1.  Create a new project on [Supabase](https://supabase.com/).
-2.  Go to the "SQL Editor" section.
-3.  Run the following SQL script to create the `predictions` table:
+With the Supabase server still running, run this command in your second terminal to set up the database schema:
 
-```sql
--- Create the 'predictions' table
-CREATE TABLE public.predictions (
-    id uuid NOT NULL DEFAULT gen_random_uuid(),
-    created_at timestamp with time zone NOT NULL DEFAULT now(),
-    team_a character varying NOT NULL,
-    team_b character varying NOT NULL,
-    match_category character varying NOT NULL DEFAULT 'men'::character varying,
-    prediction_data jsonb,
-    status character varying DEFAULT 'pending'::character varying,
-    tally integer NOT NULL DEFAULT 1,
-    CONSTRAINT predictions_pkey PRIMARY KEY (id),
-    CONSTRAINT predictions_status_check CHECK (((status)::text = ANY ((ARRAY['pending'::character varying, 'won'::character varying, 'lost'::character varying])::text[])))
-);
-
--- Enable Row Level Security (RLS) for the table
-ALTER TABLE public.predictions ENABLE ROW LEVEL SECURITY;
-
--- Create a policy to allow public read access (using the anon key)
-CREATE POLICY "Enable read access for all users"
-ON public.predictions
-FOR SELECT
-USING (true);
-
--- Note: Inserts and updates are handled by the backend functions
--- using the SERVICE_ROLE_KEY, which bypasses RLS. This setup
--- ensures that the public can read data, but only the secure
--- backend can write or modify it.
+```bash
+# This command resets the local database and runs all migration scripts
+# located in the `supabase/migrations` folder to create your tables.
+supabase db reset
 ```
-
-4.  **Important: Refresh the Schema Cache**
-    After creating the table, you must tell Supabase to recognize the new schema.
-    - Go to the **API Docs** section in your Supabase project dashboard.
-    - Click on `predictions` in the sidebar.
-    - At the top of the page, you'll see a button to **Reload schema**. Click it.
-    - This step is critical to prevent "column not found" errors when the app tries to access new columns like `tally`.
+Your local backend is now fully configured!
 
 ### 5. Run the Project Locally
 
-The project is configured to run with the Netlify CLI, which serves the frontend and the serverless functions together.
+With the Supabase backend still running, start the frontend development server in your second terminal:
 
 ```bash
+# Starts the React development server
 npm run dev
 ```
 
-This will start the Vite development server and the Netlify Functions server. Your application will be available at `http://localhost:5173` (or another port if 5173 is busy).
+Your application will be available at `http://localhost:5173`.
+
+---
+
+## ☁️ Deploying to Production
+
+To deploy your application, you need a live Supabase project and a hosting provider (e.g., Netlify, Vercel) for the frontend.
+
+### 1. Link Your Supabase Project
+
+Connect your local setup to your live Supabase project:
+```bash
+# Find your project reference ID in your Supabase Dashboard URL
+# (e.g., https://app.supabase.com/project/your-project-ref)
+supabase link --project-ref <your-project-ref>
+```
+
+### 2. Push Database Schema to Production
+
+This command applies the migration scripts from `supabase/migrations` to your live Supabase database.
+**Warning**: This can be a destructive operation on existing tables. Be careful.
+```bash
+supabase db push
+```
+Alternatively, you can copy the contents of `supabase/migrations/20240101000000_initial_schema.sql` and run it in the **SQL Editor** in your Supabase dashboard.
+
+### 3. Set Production Secrets (for Functions)
+
+Your live functions need the API keys. These are stored securely as secrets.
+```bash
+# Set secrets for the deployed Supabase project
+supabase secrets set API_KEY=your_production_google_gemini_api_key
+supabase secrets set THESPORTSDB_API_KEY=your_production_thesportsdb_api_key
+```
+
+### 4. Set Production Environment Variables (for Frontend)
+
+In your frontend hosting provider's settings (e.g., Netlify, Vercel), set the following environment variables. You can find these values in your live Supabase project's dashboard under `Project Settings > API`.
+-   `VITE_SUPABASE_URL`: Your project's public URL.
+-   `VITE_SUPABASE_ANON_KEY`: Your project's public `anon` key.
+
+### 5. Deploy Edge Functions
+
+Finally, deploy your function code to your live project.
+```bash
+supabase functions deploy
+```
+Your backend is now live! For the frontend, follow the deployment instructions for your chosen hosting provider.
+
+## 🔍 Troubleshooting
+
+**Rule #1**: Ensure all `supabase` CLI commands are run from the project's **root directory**.
+
+### Issue: Docker Container Conflict on `supabase start`
+
+If `supabase start` fails with an error like `Error response from daemon: Conflict. The container name "/supabase_vector..." is already in use...`, it means Docker containers from a previous session were not shut down correctly.
+
+**Solution: Force Stop and Restart**
+1.  **Force stop all related containers**: This command is designed to clean up any lingering services.
+    ```bash
+    supabase stop --no-backup
+    ```
+2.  **Start again**: Now you can safely start the services.
+    ```bash
+    supabase start
+    ```
+
+### Issue: CLI tries to deploy a deleted function
+
+If `supabase functions deploy` or `supabase start` fails with an error like `Bundling Function: <deleted-function-name>` or `failed to load import map`, it means the CLI's local configuration is out of sync. You need to perform a hard reset.
+
+**Solution: Hard Reset Local Supabase Environment**
+1.  **Make sure you are in the project root directory.**
+2.  **Stop Supabase**:
+    ```bash
+    supabase stop --no-backup
+    ```
+3.  **Delete Local Configuration**: This removes the cached state.
+    ```powershell
+    # PowerShell (Windows)
+    Remove-Item -Path ".supabase" -Recurse -Force
+    ```
+    ```bash
+    # Bash (macOS/Linux)
+    rm -rf .supabase
+    ```
+4.  **Restart and Deploy**: This rebuilds the configuration from scratch.
+    ```bash
+    supabase start
+    supabase functions deploy
+    ```
+
+### Issue: Remote functions are out of sync
+
+If an old function still appears in your Supabase Dashboard after you've deleted it locally, you must delete it from the server manually.
+
+1.  **Update the Supabase CLI**: An outdated CLI can cause issues.
+    - **macOS/Linux**: `brew upgrade supabase`
+    - **Windows**: `scoop update supabase`
+2.  **Delete Unwanted Remote Function**: Run the following command, replacing `function-name-to-delete` with the actual name:
+    ```bash
+    supabase functions delete function-name-to-delete
+    ```
+3.  **Deploy Again**: Run `supabase functions deploy` and verify that the output lists only the correct project functions.
+
 
 ## 📜 Disclaimer
 
-This application is for entertainment purposes only. The predictions provided are generated by an AI model and should not be considered financial advice. Please gamble responsibly and only wager what you can afford to lose.
+This application is for entertainment purposes only. The predictions provided are in no way financial advice. Please gamble responsibly and only wager what you can afford to lose.

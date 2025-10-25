@@ -2,12 +2,14 @@
   "name": "ai-football-tipster",
   "private": true,
   "version": "0.0.0",
-  "type": "module",
   "scripts": {
-    "dev": "netlify dev",
+    "dev": "vite",
     "start": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "supabase:start": "supabase start",
+    "supabase:reset": "supabase db reset",
+    "supabase:deploy": "supabase functions deploy"
   },
   "dependencies": {
     "@google/genai": "^1.24.0",

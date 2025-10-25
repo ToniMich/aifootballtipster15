@@ -3,6 +3,10 @@ import { LiveMatch } from '../types';
 import { RefreshIcon } from './icons';
 import { fetchLiveScores } from '../services/theSportsDBService';
 
+interface LiveScoresProps {
+    disabled?: boolean;
+}
+
 const LiveIndicator: React.FC = () => (
     <div className="flex items-center gap-1.5">
         <span className="relative flex h-2 w-2">
@@ -42,13 +46,18 @@ const MatchScore: React.FC<{ match: LiveMatch }> = ({ match }) => {
     );
 };
 
-const LiveScores: React.FC = () => {
+const LiveScores: React.FC<LiveScoresProps> = ({ disabled = false }) => {
     const [matches, setMatches] = useState<LiveMatch[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
 
     const fetchScores = useCallback(async () => {
+        if (disabled) {
+            setIsLoading(false);
+            setError("Setup incomplete. Cannot fetch scores.");
+            return;
+        }
         setIsLoading(true);
         setError(null);
         try {
@@ -62,7 +71,7 @@ const LiveScores: React.FC = () => {
         } finally {
             setIsLoading(false);
         }
-    }, []);
+    }, [disabled]);
     
     useEffect(() => {
         fetchScores();
@@ -88,13 +97,15 @@ const LiveScores: React.FC = () => {
         if (error) {
             return (
                 <div className="p-4 text-center">
-                    <p className="font-semibold text-red-600 dark:text-red-400">{error}</p>
-                    <button
-                        onClick={handleRefresh}
-                        className="mt-4 px-4 py-2 bg-green-600 text-white text-sm font-semibold rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 dark:focus:ring-offset-gray-800 transition-colors"
-                    >
-                        Retry
-                    </button>
+                    <p className="font-semibold text-red-600 dark:text-red-400">{error.replace('[Network Error] Failed to fetch scores: ', '')}</p>
+                    {!disabled && (
+                        <button
+                            onClick={handleRefresh}
+                            className="mt-4 px-4 py-2 bg-green-600 text-white text-sm font-semibold rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 dark:focus:ring-offset-gray-800 transition-colors"
+                        >
+                            Retry
+                        </button>
+                    )}
                 </div>
             );
         }
@@ -123,7 +134,7 @@ const LiveScores: React.FC = () => {
                 <div className="p-4 border-b border-gray-200 dark:border-gray-700 relative">
                     <div className="text-center">
                         <h2 className="text-xl font-bold text-gray-900 dark:text-white">Live Scores</h2>
-                        {lastUpdated ? (
+                        {lastUpdated && !disabled ? (
                             <p className="text-xs text-gray-500 dark:text-gray-400">
                                 Last updated: {lastUpdated.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                             </p>
@@ -134,7 +145,7 @@ const LiveScores: React.FC = () => {
                     <div className="absolute top-3 right-3">
                          <button 
                             onClick={handleRefresh} 
-                            disabled={isLoading} 
+                            disabled={isLoading || disabled}
                             className="p-1.5 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors" 
                             aria-label="Refresh live scores"
                             title="Refresh live scores"

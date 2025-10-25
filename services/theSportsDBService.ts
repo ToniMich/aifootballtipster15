@@ -1,27 +1,35 @@
 import { LiveMatch } from '../types';
+import { getSupabaseClient } from './supabaseService';
 
 /**
- * Fetches live soccer scores from the secure backend Netlify function.
- * The backend now handles all sorting, filtering, and data mapping.
+ * Fetches live soccer scores from the secure backend Supabase Edge Function.
+ * The backend handles all API key usage, sorting, filtering, and data mapping.
  * @returns {Promise<LiveMatch[]>} A promise that resolves to an array of live matches.
  */
 export async function fetchLiveScores(): Promise<LiveMatch[]> {
-    const response = await fetch('/api/fetch-scores');
+    try {
+        const supabase = getSupabaseClient();
+        // The body is optional for a GET-like request but is included for consistency.
+        const { data, error } = await supabase.functions.invoke('fetch-scores');
 
-    const contentType = response.headers.get('content-type');
-    if (!contentType || !contentType.includes('application/json')) {
-        const responseText = await response.text();
-        console.error("Received non-JSON response from scores endpoint:", responseText);
-        throw new Error(`Live scores server returned an invalid response. This may be a temporary issue. Status: ${response.status}`);
+        if (error) {
+            // The error object from invoke might contain more details
+            throw new Error(error.message || 'An unknown error occurred when invoking the function.');
+        }
+
+        // The Edge function returns a specific structure, { matches: [] }
+        if (data && Array.isArray(data.matches)) {
+            return data.matches;
+        }
+        
+        // Handle cases where the function returns an unexpected structure but doesn't throw an error.
+        console.warn("Received unexpected data structure from 'fetch-scores' function:", data);
+        return [];
+
+    } catch (error) {
+        // Construct a more informative error message for the UI.
+        const message = error instanceof Error ? error.message : 'Failed to retrieve server configuration.';
+        // Re-throw the error with a more specific message for the UI to catch.
+        throw new Error(`[Network Error] Failed to fetch scores: ${message}`);
     }
-
-    const data = await response.json();
-
-    if (!response.ok) {
-        const errorMessage = data.error || `Could not retrieve live scores. Server responded with status ${response.status}`;
-        throw new Error(errorMessage);
-    }
-
-    // The backend now returns a clean `matches` array, so no client-side processing is needed.
-    return data.matches || [];
 }
