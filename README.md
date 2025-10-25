@@ -213,6 +213,17 @@ If an old function still appears in your Supabase Dashboard after you've deleted
     ```
 3.  **Deploy Again**: Run `supabase functions deploy` and verify that the output lists only the correct project functions.
 
+### Issue: `Netlify CLI has terminated unexpectedly` error
+
+If you see an error mentioning "Netlify CLI", it means you are likely running the project with the `netlify dev` command. This project is configured to use the **Supabase CLI** for its backend, not Netlify Functions. The unused `/netlify` directory can cause conflicts with the Netlify CLI.
+
+**Solution: Use the Correct Commands**
+- **Do not** run `netlify dev`.
+- Follow the instructions in the "Getting Started" section precisely:
+  1. In one terminal, run `supabase start` to run the backend.
+  2. In a second terminal, run `npm run dev` to run the frontend.
+
+This ensures the frontend (Vite) and backend (Supabase) are running correctly and can communicate with each other. You can safely delete the `/netlify` directory to avoid future confusion.
 
 ## 📜 Disclaimer
 
