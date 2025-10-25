@@ -5,40 +5,34 @@ import { HistoryItem, RawPrediction, AccuracyStats, PredictionResultData } from 
 let supabaseClient: SupabaseClient | null = null;
 
 /**
- * Initializes the singleton Supabase client by fetching configuration from the backend.
- * This should be called once when the application starts.
- * @throws {Error} If the client cannot be initialized.
+ * Initializes the singleton Supabase client using environment variables.
+ * This is the standard and most robust method for Vite applications.
+ * @throws {Error} If the required VITE_SUPABASE_URL or VITE_SUPABASE_ANON_KEY are not set.
  */
-export const initializeSupabaseClient = async (): Promise<void> => {
+export const initializeSupabaseClient = (): void => {
     if (supabaseClient) {
         return;
     }
+    
+    // Safely access Vite environment variables.
+    const env = (import.meta as any).env;
+
+    // Check if the env object or the specific keys are missing.
+    if (!env || !env.VITE_SUPABASE_URL || !env.VITE_SUPABASE_ANON_KEY) {
+        // This specific error message is caught by App.tsx to display setup instructions.
+        throw new Error('[Configuration Error] Supabase URL/Key missing. Please set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in your .env.local file.');
+    }
+
+    const supabaseUrl = env.VITE_SUPABASE_URL;
+    const supabaseAnonKey = env.VITE_SUPABASE_ANON_KEY;
 
     try {
-        // This relative path works for both local dev (via Vite proxy) and production.
-        const response = await fetch('/functions/v1/get-config');
-        
-        if (!response.ok) {
-            const errorBody = await response.text();
-            console.error('Failed to fetch server config:', errorBody);
-            throw new Error(`The backend configuration endpoint returned an error (Status: ${response.status}).`);
-        }
-        
-        const config = await response.json();
-
-        if (!config.supabaseUrl || !config.supabaseAnonKey) {
-            throw new Error('Invalid configuration received from the server.');
-        }
-
-        supabaseClient = createClient(config.supabaseUrl, config.supabaseAnonKey);
-
+        supabaseClient = createClient(supabaseUrl, supabaseAnonKey);
     } catch (error) {
         console.error("Supabase client initialization failed:", error);
-        // This specific error message is caught by App.tsx to display the setup instructions.
-        throw new Error(`[Configuration Error] Could not connect to the backend. Please ensure your Supabase project is running and you have deployed its functions.`);
+        throw new Error(`Failed to create Supabase client: ${error.message}`);
     }
 };
-
 
 /**
  * Returns the initialized singleton Supabase client.

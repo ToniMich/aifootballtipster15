@@ -86,23 +86,23 @@ const App: React.FC = () => {
     useEffect(() => {
         const initializeApp = async () => {
             try {
-                // Step 1: Initialize the Supabase client by fetching config from the backend.
-                await initializeSupabaseClient();
+                // Step 1: Initialize the Supabase client synchronously using environment variables.
+                initializeSupabaseClient();
                 
                 // Step 2: Once the client is ready, fetch the initial data.
                 await refreshData();
                 setAppStatus('ready');
             } catch (err) {
                 const errorMessage = err instanceof Error ? err.message : 'Initialization failed.';
-                // If it's a configuration error from our new initializer, show the setup instructions.
+                // Catch the specific config error from the initializer to show setup instructions.
                 if (errorMessage.startsWith('[Configuration Error]')) {
                     setInitError(errorMessage);
                     setAppStatus('config_error');
                 } else {
-                    // For any other initialization errors, log them and show the main app with an error banner.
+                    // For any other initialization errors (e.g., database connection).
                     console.error("Initialization failed:", err);
                     setInitError(errorMessage);
-                    setAppStatus('ready');
+                    setAppStatus('ready'); // Show the main app but with an error banner.
                 }
             }
         };
