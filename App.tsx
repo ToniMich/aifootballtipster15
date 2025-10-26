@@ -299,20 +299,27 @@ const App: React.FC = () => {
                                 </div>
                                 <CategoryToggle selectedCategory={matchCategory} onSelectCategory={setMatchCategory} />
                                 <div className="pt-2">
-                                    {!isLoading ? (
+                                    {isLoading ? (
+                                        <button
+                                            onClick={handleStopOrReset}
+                                            className="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-3 px-4 rounded-lg transition-colors duration-300 focus:outline-none focus:ring-4 focus:ring-red-500/50"
+                                        >
+                                            Cancel
+                                        </button>
+                                    ) : predictionResult || error ? (
+                                        <button
+                                            onClick={handleStopOrReset}
+                                            className="w-full bg-gray-600 hover:bg-gray-700 text-white font-bold py-3 px-4 rounded-lg transition-all duration-300 transform hover:scale-105 shadow-lg focus:outline-none focus:ring-4 focus:ring-gray-500/50"
+                                        >
+                                            Start New Prediction
+                                        </button>
+                                    ) : (
                                         <button
                                             onClick={handlePredict}
                                             className="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-4 rounded-lg transition-all duration-300 transform hover:scale-105 shadow-lg hover:shadow-green-500/40 focus:outline-none focus:ring-4 focus:ring-green-500/50 disabled:bg-gray-400 disabled:cursor-not-allowed disabled:transform-none disabled:shadow-none"
                                             disabled={!teamA || !teamB}
                                         >
                                             Get AI Prediction
-                                        </button>
-                                    ) : (
-                                        <button
-                                            onClick={handleStopOrReset}
-                                            className="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-3 px-4 rounded-lg transition-colors duration-300 focus:outline-none focus:ring-4 focus:ring-red-500/50"
-                                        >
-                                            Cancel
                                         </button>
                                     )}
                                 </div>

@@ -4,12 +4,6 @@
 
 ![AI Football Tipster Screenshot](https://storage.googleapis.com/aistudio-hosting/readme-assets/ai-football-tipster/screenshot.png)
 
-## Architecture Note: Supabase vs. Netlify
-
-**This project is built to use Supabase for all backend services**, including the database and serverless Edge Functions, as described in the setup guides below.
-
-You may notice a `netlify` folder in the project structure. This contains legacy files from a previous architectural iteration and is **not used** in the current version of the application. Please disregard the contents of the `netlify` folder and follow the Supabase instructions for development and deployment.
-
 ## ✨ Core Features
 
 -   **🤖 AI-Powered Predictions**: Utilizes Google's Gemini Pro model to generate nuanced match predictions.

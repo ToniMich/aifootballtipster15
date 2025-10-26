@@ -8,8 +8,9 @@ let initializePromise: Promise<void> | null = null;
 
 /**
  * Initializes the singleton Supabase client.
- * It first tries to fetch credentials from a secure backend endpoint.
- * As a fallback for local development, it checks for Vite environment variables.
+ * This function now exclusively uses Vite's environment variables, which is the
+ * standard and most reliable method for both local development (via .env.local)
+ * and production builds (via hosting provider's environment variables).
  *
  * @returns {Promise<void>} A promise that resolves when the client is initialized.
  * @throws {Error} If credentials cannot be obtained.
@@ -23,44 +24,24 @@ const initializeSupabaseClient = (): Promise<void> => {
     }
 
     initializePromise = (async () => {
-        let supabaseUrl: string | undefined;
-        let supabaseAnonKey: string | undefined;
-
-        try {
-            // Production-first approach: Fetch config from the backend.
-            // This assumes a reverse proxy forwards /functions/v1/* to the Supabase instance.
-            const response = await fetch('/functions/v1/get-config');
-            if (response.ok) {
-                const config = await response.json();
-                if (config.supabaseUrl && config.supabaseAnonKey) {
-                    supabaseUrl = config.supabaseUrl;
-                    supabaseAnonKey = config.supabaseAnonKey;
-                } else {
-                     console.warn("Fetched config from backend is incomplete.");
-                }
-            } else {
-                 console.warn(`Failed to fetch config from backend (status: ${response.status}), falling back to local environment variables.`);
-            }
-        } catch (error) {
-            console.warn("Could not fetch config from backend, falling back to local environment variables. Error:", error);
-        }
-
-        // Fallback for local development using Vite's env variables.
-        if (!supabaseUrl || !supabaseAnonKey) {
-            supabaseUrl = (import.meta as any)?.env?.VITE_SUPABASE_URL;
-            supabaseAnonKey = (import.meta as any)?.env?.VITE_SUPABASE_ANON_KEY;
-        }
-
+        // Direct initialization using Vite's standard environment variables.
+        const supabaseUrl = (import.meta as any)?.env?.VITE_SUPABASE_URL;
+        const supabaseAnonKey = (import.meta as any)?.env?.VITE_SUPABASE_ANON_KEY;
+        
+        // Check if the environment variables are loaded correctly.
         if (!supabaseUrl || !supabaseAnonKey) {
             initializePromise = null; // Reset for future retries
-            throw new Error("[Configuration Error] VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY are missing. Please create a .env.local file in the project root and add these values. Refer to the README.md for setup instructions.");
+            // Provide a clear error message that aligns with the project's setup instructions.
+            throw new Error("[Configuration Error] VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY are missing. Please create a .env.local file in the project root, add the values, and restart your development server.");
         }
 
         try {
+            // Create the Supabase client instance.
             supabaseClient = createClient(supabaseUrl, supabaseAnonKey);
         } catch (error) {
-             initializePromise = null;
+             initializePromise = null; // Reset on failure
              console.error("Supabase client initialization failed:", error.message);
+             // Re-throw the original error to be caught by the App component.
              throw error;
         }
 

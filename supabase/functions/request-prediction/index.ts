@@ -63,10 +63,11 @@ serve(async (req: Request) => {
 
     if (insertError) throw new Error(`[Database Error] Failed to create prediction job: ${insertError.message}`);
 
-    // Invoke the background function without awaiting it (fire-and-forget)
-    supabaseAdminClient.functions.invoke('generate-prediction-background', {
+    // Directly invoke the AI prediction function without awaiting it (fire-and-forget).
+    // This allows the current function to return a job ID to the user immediately.
+    supabaseAdminClient.functions.invoke('gemini-predict', {
         body: { jobId: newJob.id, teamA, teamB, matchCategory },
-    }).catch(err => console.error("Error invoking background function:", err));
+    }).catch(err => console.error("Error invoking background prediction function:", err));
 
     return new Response(JSON.stringify({ isCached: false, data: { jobId: newJob.id } }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
