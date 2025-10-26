@@ -1,8 +1,8 @@
 // supabase/functions/gemini-predict/index.ts
 
-import { serve } from 'https://deno.land/std@0.177.0/http/server.ts'
 import { supabaseAdminClient as supabase } from '../_shared/init.ts'
-import { GoogleGenAI, Type } from '@google/genai';
+import { GoogleGenAI, Type } from 'npm:@google/genai@1.24.0';
+import { corsHeaders } from "../_shared/cors.ts";
 
 // Fix for "Cannot find name 'Deno'" error in Supabase Edge Functions.
 declare const Deno: any;
@@ -56,8 +56,8 @@ const predictionSchema = {
     required: ['prediction', 'confidence', 'teamA_winProbability', 'teamB_winProbability', 'drawProbability', 'analysis', 'keyStats', 'bestBets', 'availabilityFactors', 'venue', 'kickoffTime', 'referee', 'leagueContext', 'playerStats', 'goalScorerPredictions', 'goalProbabilities']
 };
 
-
-serve(async (req: Request) => {
+Deno.serve(async (req: Request) => {
+    // This is a background function and does not need to handle OPTIONS preflight requests.
     const apiKey = Deno.env.get('API_KEY');
     
     let jobId: string | null = null;
@@ -67,6 +67,8 @@ serve(async (req: Request) => {
         jobId = body.jobId;
     } catch (e) {
         console.error("Gemini-predict function called with invalid body:", e.message);
+        // This function is invoked by another function, so we return an error response
+        // which can be caught by the caller if it's awaiting the result.
         return new Response(JSON.stringify({ error: "Invalid request body" }), { status: 400 });
     }
 
@@ -94,12 +96,13 @@ serve(async (req: Request) => {
         const { teamA, teamB, matchCategory } = body;
         const ai = new GoogleGenAI({ apiKey: apiKey });
 
-        const prompt = `You are a world-class football analyst. Analyze the upcoming ${matchCategory}'s soccer match between ${teamA} and ${teamB}. Provide the most current and relevant information possible, including team news, form, historical data, injuries, suspensions, league context (table position, rivalries), and key player statistics. Your response must be a single, valid JSON object that strictly adheres to the provided schema. Populate all fields with accurate, well-researched data. The sum of teamA_winProbability, teamB_winProbability, and drawProbability must equal 100%. Do not include any text, markdown, or any other content outside of the JSON object itself.`;
+        const prompt = `You are a world-class football analyst. Use Google Search to find the most current and relevant information possible and analyze the upcoming ${matchCategory}'s soccer match between ${teamA} and ${teamB}. Your analysis must cover team news, form, historical data, injuries, suspensions, league context (table position, rivalries), and key player statistics. Your response must be a single, valid JSON object that strictly adheres to the provided schema. Populate all fields with accurate, well-researched data from your search results. The sum of teamA_winProbability, teamB_winProbability, and drawProbability must equal 100%. Do not include any text, markdown, or any other content outside of the JSON object itself.`;
 
         const response = await ai.models.generateContent({
             model: "gemini-2.5-flash",
             contents: prompt,
             config: {
+                tools: [{googleSearch: {}}],
                 responseMimeType: "application/json",
                 responseSchema: predictionSchema
             },

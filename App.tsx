@@ -6,17 +6,17 @@ import { getTheme, setTheme as saveTheme } from './services/localStorageService'
 import { syncPredictionStatuses } from './services/syncService';
 import Loader from './components/Loader';
 import PredictionResult from './components/PredictionResult';
-import { FTLogoIcon, SunIcon, MoonIcon, WarningIcon } from './components/icons';
+import { FTLogoIcon, SunIcon, MoonIcon } from './components/icons';
 import TeamInput from './components/TeamInput';
 import DonationBlock from './components/DonationBlock';
 import CategoryToggle from './components/CategoryToggle';
 import PredictionHistory from './components/PredictionHistory';
+import PredictionFeed from './components/PredictionFeed';
 import LiveScores from './components/LiveScores';
 import AccuracyTracker from './components/AccuracyTracker';
 import TicketModal from './components/TicketModal';
 import TrackRecord from './components/TrackRecord';
-import PredictionFeed from './components/PredictionFeed';
-import SetupInstructions from './components/SetupInstructions';
+import Footer from './components/Footer';
 
 interface AccuracyStats {
     total: number;
@@ -44,8 +44,7 @@ const App: React.FC = () => {
     const [predictionResult, setPredictionResult] = useState<HistoryItem | null>(null);
     const [isLoading, setIsLoading] = useState<boolean>(false);
     const [error, setError] = useState<string | null>(null);
-    const [appStatus, setAppStatus] = useState<'initializing' | 'ready' | 'config_error' | 'error'>('initializing');
-    const [initError, setInitError] = useState<string | null>(null);
+    const [appStatus, setAppStatus] = useState<'initializing' | 'ready' | 'failed'>('initializing');
     const [history, setHistory] = useState<HistoryItem[]>([]);
     const [accuracyStats, setAccuracyStats] = useState<AccuracyStats>({ total: 0, wins: 0 });
     const [theme, setTheme] = useState<'light' | 'dark'>(getTheme());
@@ -86,24 +85,15 @@ const App: React.FC = () => {
     useEffect(() => {
         const initializeApp = async () => {
             try {
-                // Step 1: Asynchronously initialize the Supabase client.
                 await initializeSupabaseClient();
-                
-                // Step 2: Once the client is ready, fetch the initial data.
                 await refreshData();
                 setAppStatus('ready');
             } catch (err) {
                 const errorMessage = err instanceof Error ? err.message : 'Initialization failed.';
-                // Catch the specific config error from the initializer to show setup instructions.
-                if (errorMessage.startsWith('[Configuration Error]')) {
-                    setInitError(errorMessage);
-                    setAppStatus('config_error');
-                } else {
-                    // For any other initialization errors (e.g., database connection).
-                    console.error("Initialization failed:", err);
-                    setInitError(errorMessage);
-                    setAppStatus('error');
-                }
+                console.error("Application initialization failed:", errorMessage);
+                // Set status to failed, but we won't show a blocking UI error.
+                // The app will render, but some features might be disabled.
+                setAppStatus('failed');
             }
         };
 
@@ -252,60 +242,52 @@ const App: React.FC = () => {
                 </div>
             );
         }
-
-        if (appStatus === 'config_error') {
-            return <SetupInstructions error={initError} />;
-        }
         
-        if (appStatus === 'error') {
-            return (
-                 <div className="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-                    <div className="p-4 bg-red-100 dark:bg-red-900/50 border border-red-400 dark:border-red-500 rounded-lg text-red-800 dark:text-red-300 text-center animate-fade-in flex items-center justify-center gap-3">
-                        <WarningIcon className="h-6 w-6" />
-                        <p className="font-semibold">Failed to load application: {initError}</p>
-                    </div>
-                </div>
-            )
-        }
-
-
-        // appStatus is 'ready' from here on.
         return (
             <div className="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-                <div className="lg:grid lg:grid-cols-3 lg:gap-8">
-                    <div className="lg:col-span-2 space-y-8">
+                <div className="grid grid-cols-1 lg:grid-cols-5 gap-8">
+                    {/* Main content column */}
+                    <div className="lg:col-span-3 space-y-8">
                         <div className="bg-white dark:bg-gray-800/50 backdrop-blur-sm border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg p-6 sm:p-8 animate-fade-in-down">
-                            <div className="flex flex-col sm:flex-row justify-between items-center mb-6 gap-4">
-                                <h2 className="text-2xl font-bold text-gray-900 dark:text-white text-center sm:text-left">Get a New Prediction</h2>
-                                <AccuracyTracker total={accuracyStats.total} wins={accuracyStats.wins} />
-                            </div>
+                            <h2 className="text-center text-3xl font-bold text-gray-900 dark:text-white mb-2">
+                                The Predictor
+                            </h2>
+                            <p className="text-center text-gray-600 dark:text-gray-400 mb-6">Enter two teams to get an AI-powered match analysis.</p>
 
                             <div className="space-y-4">
+                                <CategoryToggle selectedCategory={matchCategory} onSelectCategory={setMatchCategory} />
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                     <TeamInput
                                         value={teamA}
                                         onChange={setTeamA}
                                         placeholder="Enter Home Team"
-                                        disabled={isLoading}
+                                        disabled={isLoading || appStatus === 'failed'}
                                         className="w-full px-4 py-2 text-base bg-gray-50 dark:bg-gray-900/50 border border-gray-300 dark:border-gray-600 rounded-md focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-colors disabled:opacity-50"
                                     />
                                     <TeamInput
                                         value={teamB}
                                         onChange={setTeamB}
                                         placeholder="Enter Away Team"
-                                        disabled={isLoading}
+                                        disabled={isLoading || appStatus === 'failed'}
                                         className="w-full px-4 py-2 text-base bg-gray-50 dark:bg-gray-900/50 border border-gray-300 dark:border-gray-600 rounded-md focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-colors disabled:opacity-50"
                                     />
                                 </div>
-                                <CategoryToggle selectedCategory={matchCategory} onSelectCategory={setMatchCategory} />
                                 <div className="pt-2">
                                     {isLoading ? (
-                                        <button
-                                            onClick={handleStopOrReset}
-                                            className="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-3 px-4 rounded-lg transition-colors duration-300 focus:outline-none focus:ring-4 focus:ring-red-500/50"
-                                        >
-                                            Cancel
-                                        </button>
+                                        <div className="flex items-center gap-4">
+                                            <button
+                                                disabled
+                                                className="w-full bg-gradient-to-r from-green-500 to-green-600 text-white font-bold py-3 px-4 rounded-lg shadow-lg opacity-50 cursor-not-allowed"
+                                            >
+                                                Getting Prediction...
+                                            </button>
+                                            <button
+                                                onClick={handleStopOrReset}
+                                                className="flex-shrink-0 bg-red-600 hover:bg-red-700 text-white font-bold py-3 px-4 rounded-lg transition-colors duration-300 focus:outline-none focus:ring-4 focus:ring-red-500/50"
+                                            >
+                                                Stop
+                                            </button>
+                                        </div>
                                     ) : predictionResult || error ? (
                                         <button
                                             onClick={handleStopOrReset}
@@ -316,8 +298,8 @@ const App: React.FC = () => {
                                     ) : (
                                         <button
                                             onClick={handlePredict}
-                                            className="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-4 rounded-lg transition-all duration-300 transform hover:scale-105 shadow-lg hover:shadow-green-500/40 focus:outline-none focus:ring-4 focus:ring-green-500/50 disabled:bg-gray-400 disabled:cursor-not-allowed disabled:transform-none disabled:shadow-none"
-                                            disabled={!teamA || !teamB}
+                                            className="w-full bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white font-bold py-3 px-4 rounded-lg transition-all duration-300 transform hover:scale-105 shadow-lg hover:shadow-green-500/40 focus:outline-none focus:ring-4 focus:ring-green-500/50 disabled:bg-gray-400 disabled:cursor-not-allowed disabled:transform-none disabled:shadow-none"
+                                            disabled={!teamA || !teamB || appStatus === 'failed'}
                                         >
                                             Get AI Prediction
                                         </button>
@@ -329,19 +311,23 @@ const App: React.FC = () => {
                         {isLoading && <Loader />}
                         
                         {(error || predictionResult) && !isLoading && (
-                            <PredictionResult result={predictionResult} error={error} teamA={teamA} teamB={teamB} />
+                             <div className="animate-fade-in-down">
+                                <PredictionResult result={predictionResult} error={error} teamA={teamA} teamB={teamB} />
+                             </div>
                         )}
 
-                        <PredictionFeed tickets={history} />
-                        
-                        <TrackRecord history={history} />
-
                         <PredictionHistory tickets={history} onUpdateStatus={handleUpdatePredictionStatus} onSelectTicket={setSelectedTicket} onSync={handleSync} isSyncing={isSyncing} />
-
                     </div>
-                    <div className="lg:col-span-1 space-y-8 mt-8 lg:mt-0">
-                        <LiveScores disabled={!!initError} />
-                        <DonationBlock />
+
+                    {/* Sidebar column */}
+                    <div className="lg:col-span-2 space-y-8">
+                        <div className="lg:sticky lg:top-28 space-y-8">
+                            <AccuracyTracker total={accuracyStats.total} wins={accuracyStats.wins} />
+                            <LiveScores disabled={appStatus === 'failed'} />
+                            <PredictionFeed tickets={history} />
+                            <TrackRecord history={history} />
+                            <DonationBlock />
+                        </div>
                     </div>
                 </div>
             </div>
@@ -349,35 +335,38 @@ const App: React.FC = () => {
     }
 
     return (
-        <div className="bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-gray-100 min-h-screen transition-colors duration-300">
+        <div className="bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100 min-h-screen transition-colors duration-300 flex flex-col">
             <header className="py-4 shadow-md bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm sticky top-0 z-40 border-b border-gray-200 dark:border-gray-700">
-                <div className="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex justify-between items-center">
-                    <div className="flex items-center gap-3">
-                        <FTLogoIcon className="h-10 w-10" />
-                        <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-gray-900 dark:text-white">
-                            AI Football Tipster
-                        </h1>
-                    </div>
-                    <div className="flex items-center gap-2">
-                         {syncMessage && (
-                            <span className="hidden md:inline-block text-sm text-gray-600 dark:text-gray-400 font-medium animate-fade-in">{syncMessage}</span>
-                         )}
-                        <button
-                            onClick={toggleTheme}
-                            className="p-2 rounded-full text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-green-500"
-                            aria-label={`Switch to ${theme === 'light' ? 'dark' : 'light'} mode`}
-                        >
-                            {theme === 'light' ? <MoonIcon className="h-6 w-6" /> : <SunIcon className="h-6 w-6" />}
-                        </button>
+                <div className="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                    <div className="flex justify-between items-center">
+                        <div className="flex items-center gap-3">
+                            <FTLogoIcon className="h-10 w-10" />
+                            <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-gray-900 dark:text-white">
+                                AI Football Tipster
+                            </h1>
+                        </div>
+                        <div className="flex items-center gap-2">
+                             {syncMessage && (
+                                <span className="hidden md:inline-block text-sm text-gray-600 dark:text-gray-400 font-medium animate-fade-in">{syncMessage}</span>
+                             )}
+                            <button
+                                onClick={toggleTheme}
+                                className="p-2 rounded-full text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-green-500"
+                                aria-label={`Switch to ${theme === 'light' ? 'dark' : 'light'} mode`}
+                            >
+                                {theme === 'light' ? <MoonIcon className="h-6 w-6" /> : <SunIcon className="h-6 w-6" />}
+                            </button>
+                        </div>
                     </div>
                 </div>
             </header>
 
-            <main className="py-8">
+            <main className="py-8 sm:py-10 flex-grow">
                {renderAppContent()}
             </main>
 
             <TicketModal ticket={selectedTicket} onClose={() => setSelectedTicket(null)} />
+            <Footer />
         </div>
     );
 };

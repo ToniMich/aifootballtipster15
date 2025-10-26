@@ -1,3 +1,15 @@
+// Manually define types for Vite's environment variables. This is a robust way to
+// handle cases where TypeScript's default type resolution for 'vite/client' fails,
+// which can occur in some editor or build environments.
+declare global {
+    interface ImportMeta {
+        readonly env: {
+            readonly VITE_SUPABASE_URL: string;
+            readonly VITE_SUPABASE_ANON_KEY: string;
+        }
+    }
+}
+
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { HistoryItem, RawPrediction, AccuracyStats, PredictionResultData } from '../types';
 
@@ -24,9 +36,9 @@ const initializeSupabaseClient = (): Promise<void> => {
     }
 
     initializePromise = (async () => {
-        // Direct initialization using Vite's standard environment variables.
-        const supabaseUrl = (import.meta as any)?.env?.VITE_SUPABASE_URL;
-        const supabaseAnonKey = (import.meta as any)?.env?.VITE_SUPABASE_ANON_KEY;
+        // Use Vite's import.meta.env to access environment variables on the client-side.
+        const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+        const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
         
         // Check if the environment variables are loaded correctly.
         if (!supabaseUrl || !supabaseAnonKey) {

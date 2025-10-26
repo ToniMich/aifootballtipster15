@@ -110,11 +110,11 @@ interface PredictionHistoryProps {
 
 const PredictionHistory: React.FC<PredictionHistoryProps> = ({ tickets, onUpdateStatus, onSelectTicket, onSync, isSyncing }) => {
     return (
-        <div className="w-full max-w-2xl animate-fade-in">
+        <div className="w-full max-w-4xl mx-auto animate-fade-in">
             <div className="flex justify-between items-center mb-4">
                 <div className="flex items-center gap-3">
                     <TicketIcon className="h-7 w-7 text-green-600 dark:text-green-300" />
-                    <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Prediction History</h2>
+                    <h2 className="text-3xl font-bold text-gray-900 dark:text-white">Prediction History</h2>
                 </div>
                 <button
                     onClick={onSync}
