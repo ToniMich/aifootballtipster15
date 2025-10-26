@@ -1,13 +1,14 @@
 // supabase/functions/get-prediction/index.ts
 
-import { serve } from 'https://deno.land/std@0.177.0/http/server.ts'
 import { corsHeaders } from '../_shared/cors.ts'
 import { supabaseAdminClient as supabase } from '../_shared/init.ts'
 
-serve(async (req: Request) => {
+declare const Deno: any;
+
+Deno.serve(async (req: Request) => {
   // Handle preflight OPTIONS request
   if (req.method === 'OPTIONS') {
-    return new Response(null, { headers: corsHeaders, status: 204 })
+    return new Response('ok', { headers: corsHeaders })
   }
 
   try {
@@ -40,7 +41,7 @@ serve(async (req: Request) => {
     console.error('Error in get-prediction function:', error);
     return new Response(JSON.stringify({ error: error.message }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      status: 500,
+      status: 400,
     })
   }
 })

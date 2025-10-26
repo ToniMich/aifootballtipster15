@@ -1,6 +1,5 @@
 // supabase/functions/update-statuses/index.ts
 
-import { serve } from 'https://deno.land/std@0.177.0/http/server.ts'
 import { corsHeaders } from '../_shared/cors.ts'
 import { normalizeTeamName } from '../_shared/teamNameNormalizer.ts'
 import { supabaseAdminClient as supabase } from '../_shared/init.ts'
@@ -72,9 +71,9 @@ const determineOutcome = (prediction: Prediction, match: Match): 'won' | 'lost' 
     return isWin ? 'won' : 'lost';
 };
 
-serve(async (req: Request) => {
+Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') {
-    return new Response(null, { headers: corsHeaders, status: 204 })
+    return new Response('ok', { headers: corsHeaders })
   }
 
   try {
@@ -154,7 +153,7 @@ serve(async (req: Request) => {
   } catch (error) {
     console.error('Error in update-statuses function:', error);
     return new Response(JSON.stringify({ error: error.message }), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400
     });
   }
 })

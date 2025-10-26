@@ -1,6 +1,5 @@
 // supabase/functions/fetch-scores/index.ts
 
-import { serve } from 'https://deno.land/std@0.177.0/http/server.ts'
 import { corsHeaders } from '../_shared/cors.ts'
 
 // Fix for "Cannot find name 'Deno'" error in Supabase Edge Functions.
@@ -46,10 +45,10 @@ function mapEventToLiveMatch(event: SportsDBEvent) {
     };
 }
 
-serve(async (req: Request) => {
+Deno.serve(async (req: Request) => {
   // Handle preflight OPTIONS request
   if (req.method === 'OPTIONS') {
-    return new Response(null, { headers: corsHeaders, status: 204 })
+    return new Response('ok', { headers: corsHeaders })
   }
 
   try {
@@ -119,7 +118,7 @@ serve(async (req: Request) => {
     console.error("Error in fetch-scores function:", error);
     return new Response(JSON.stringify({ error: error.message }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      status: 500,
+      status: 400,
     });
   }
 })
