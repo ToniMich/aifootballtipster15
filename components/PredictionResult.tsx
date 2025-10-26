@@ -200,7 +200,9 @@ const PredictionResult: React.FC<PredictionResultProps> = ({ result, error, team
         return null;
     }
     
-    const confidenceValue = parseInt(result.drawProbability, 10) || 0;
+    const probA = parseInt(result.teamA_winProbability, 10) || 0;
+    const probB = parseInt(result.teamB_winProbability, 10) || 0;
+    const probDraw = parseInt(result.drawProbability, 10) || 0;
 
     return (
         <div className="bg-white dark:bg-gray-800/50 backdrop-blur-sm border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg animate-fade-in overflow-hidden">
@@ -211,19 +213,48 @@ const PredictionResult: React.FC<PredictionResultProps> = ({ result, error, team
                         Retrieved from recent history
                     </div>
                 )}
-                <div className="flex justify-around items-center text-center">
-                    <div className="flex-1 flex flex-col items-center gap-2">
-                        <TeamLogo logoUrl={result.teamA_logo} teamName={teamA} />
+                <div className="space-y-4">
+                    {/* Team Info */}
+                    <div className="flex justify-between items-center text-center">
+                        <div className="flex-1 flex flex-col items-center gap-2">
+                        <TeamLogo logoUrl={result.teamA_logo} teamName={teamA} sizeClass="h-14 w-14 md:h-16 md:w-16" />
                         <h3 className="text-lg md:text-xl font-bold text-gray-800 dark:text-gray-200">{teamA}</h3>
-                    </div>
-                    <span className="text-2xl font-light text-gray-400 dark:text-gray-500 mx-2">vs</span>
-                    <div className="flex-1 flex flex-col items-center gap-2">
-                        <TeamLogo logoUrl={result.teamB_logo} teamName={teamB} />
+                        </div>
+                        <span className="text-2xl font-light text-gray-400 dark:text-gray-500 mx-2">vs</span>
+                        <div className="flex-1 flex flex-col items-center gap-2">
+                        <TeamLogo logoUrl={result.teamB_logo} teamName={teamB} sizeClass="h-14 w-14 md:h-16 md:w-16" />
                         <h3 className="text-lg md:text-xl font-bold text-gray-800 dark:text-gray-200">{teamB}</h3>
+                        </div>
+                    </div>
+
+                    {/* Probability Bar */}
+                    <div>
+                        <div className="flex justify-between items-center text-sm font-semibold text-gray-800 dark:text-gray-200 px-1 mb-1">
+                            <span style={{ width: `${probA}%` }} className="text-center">{probA}%</span>
+                            <span style={{ width: `${probDraw}%` }} className="text-center">{probDraw}% Draw</span>
+                            <span style={{ width: `${probB}%` }} className="text-center">{probB}%</span>
+                        </div>
+                        <div className="flex w-full h-3 rounded-full overflow-hidden bg-gray-200 dark:bg-gray-700">
+                        <div
+                            className="bg-green-500 transition-all duration-500"
+                            style={{ width: `${probA}%` }}
+                            title={`${teamA} Win Probability: ${probA}%`}
+                        />
+                        <div
+                            className="bg-gray-400 dark:bg-gray-500 transition-all duration-500"
+                            style={{ width: `${probDraw}%` }}
+                            title={`Draw Probability: ${probDraw}%`}
+                        />
+                        <div
+                            className="bg-blue-500 transition-all duration-500"
+                            style={{ width: `${probB}%` }}
+                            title={`${teamB} Win Probability: ${probB}%`}
+                        />
+                        </div>
                     </div>
                 </div>
                 {result.leagueContext && (
-                    <p className="text-center text-sm font-semibold text-gray-500 dark:text-gray-400 mt-3">{result.leagueContext.leagueName}</p>
+                    <p className="text-center text-sm font-semibold text-gray-500 dark:text-gray-400 mt-4">{result.leagueContext.leagueName}</p>
                 )}
                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 mt-4">
                     <InfoCard icon={<LocationMarkerIcon className="h-5 w-5" />} title="Venue" value={result.venue} />

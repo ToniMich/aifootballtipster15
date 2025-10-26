@@ -1,12 +1,9 @@
 // supabase/functions/request-prediction/index.ts
 
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts'
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { corsHeaders } from '../_shared/cors.ts'
 import { normalizeTeamName } from '../_shared/teamNameNormalizer.ts'
-
-// Fix for "Cannot find name 'Deno'" error in Supabase Edge Functions.
-declare const Deno: any;
+import { supabaseAdminClient } from '../_shared/init.ts'
 
 serve(async (req: Request) => {
   // Handle preflight OPTIONS request
@@ -15,15 +12,6 @@ serve(async (req: Request) => {
   }
 
   try {
-    const supabaseUrl = Deno.env.get('SUPABASE_URL');
-    const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
-
-    if (!supabaseUrl || !serviceRoleKey) {
-        throw new Error('[Configuration Error] Supabase credentials are not configured on the server.');
-    }
-
-    const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey);
-    
     const { teamA: rawTeamA, teamB: rawTeamB, matchCategory } = await req.json()
     const teamA = normalizeTeamName(rawTeamA)
     const teamB = normalizeTeamName(rawTeamB)
@@ -31,7 +19,7 @@ serve(async (req: Request) => {
     const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
     
     const fetchRecentPrediction = async (home: string, away: string) => {
-        const { data, error } = await supabaseAdmin
+        const { data, error } = await supabaseAdminClient
             .from('predictions')
             .select('*')
             .eq('team_a', home)
@@ -49,14 +37,14 @@ serve(async (req: Request) => {
     
     if (existingPrediction) {
         if (existingPrediction.status === 'processing') {
-            await supabaseAdmin.from('predictions').update({ tally: existingPrediction.tally + 1 }).eq('id', existingPrediction.id);
+            await supabaseAdminClient.from('predictions').update({ tally: existingPrediction.tally + 1 }).eq('id', existingPrediction.id);
             return new Response(JSON.stringify({ isCached: false, data: { jobId: existingPrediction.id } }), {
                 headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200,
             });
         }
 
         if (['pending', 'won', 'lost'].includes(existingPrediction.status)) {
-            const { data: updatedPrediction } = await supabaseAdmin.from('predictions').update({ tally: existingPrediction.tally + 1 }).eq('id', existingPrediction.id).select().single();
+            const { data: updatedPrediction } = await supabaseAdminClient.from('predictions').update({ tally: existingPrediction.tally + 1 }).eq('id', existingPrediction.id).select().single();
             if (typeof updatedPrediction.prediction_data !== 'object' || updatedPrediction.prediction_data === null) {
                 updatedPrediction.prediction_data = {};
             }
@@ -67,7 +55,7 @@ serve(async (req: Request) => {
         }
     }
     
-    const { data: newJob, error: insertError } = await supabaseAdmin
+    const { data: newJob, error: insertError } = await supabaseAdminClient
         .from('predictions')
         .insert({ team_a: teamA, team_b: teamB, match_category: matchCategory, status: 'processing', prediction_data: {}, tally: 1 })
         .select()
@@ -76,7 +64,7 @@ serve(async (req: Request) => {
     if (insertError) throw new Error(`[Database Error] Failed to create prediction job: ${insertError.message}`);
 
     // Invoke the background function without awaiting it (fire-and-forget)
-    supabaseAdmin.functions.invoke('generate-prediction-background', {
+    supabaseAdminClient.functions.invoke('generate-prediction-background', {
         body: { jobId: newJob.id, teamA, teamB, matchCategory },
     }).catch(err => console.error("Error invoking background function:", err));
 

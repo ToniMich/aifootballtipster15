@@ -7,13 +7,14 @@ let supabaseClient: SupabaseClient | null = null;
 let initializePromise: Promise<void> | null = null;
 
 /**
- * Initializes the singleton Supabase client. It first tries to use environment variables,
- * then falls back to fetching the configuration from the local Supabase instance
- * during development, making the setup more resilient.
+ * Initializes the singleton Supabase client.
+ * It first tries to fetch credentials from a secure backend endpoint.
+ * As a fallback for local development, it checks for Vite environment variables.
+ *
  * @returns {Promise<void>} A promise that resolves when the client is initialized.
+ * @throws {Error} If credentials cannot be obtained.
  */
-export const initializeSupabaseClient = (): Promise<void> => {
-    // If the client is already initialized or initialization is in progress, return the existing promise.
+const initializeSupabaseClient = (): Promise<void> => {
     if (supabaseClient) {
         return Promise.resolve();
     }
@@ -22,57 +23,59 @@ export const initializeSupabaseClient = (): Promise<void> => {
     }
 
     initializePromise = (async () => {
+        let supabaseUrl: string | undefined;
+        let supabaseAnonKey: string | undefined;
+
         try {
-            const env = (import.meta as any).env;
-            let supabaseUrl = env.VITE_SUPABASE_URL;
-            let supabaseAnonKey = env.VITE_SUPABASE_ANON_KEY;
-
-            // If environment variables are not set in development, try fetching from the local dev server.
-            // This makes local setup smoother, as only `supabase start` is required for the frontend to connect.
-            if ((!supabaseUrl || !supabaseAnonKey) && env.DEV) {
-                console.log("VITE_SUPABASE vars not found. Attempting to fetch config from local Supabase instance...");
-                const localConfigUrl = 'http://127.0.0.1:54321/functions/v1/get-config';
-                try {
-                    const response = await fetch(localConfigUrl);
-                    if (!response.ok) {
-                        throw new Error(`Local config server responded with status ${response.status}`);
-                    }
-                    const config = await response.json();
-                    if (config.supabaseUrl && config.supabaseAnonKey) {
-                        supabaseUrl = config.supabaseUrl;
-                        supabaseAnonKey = config.supabaseAnonKey;
-                        console.log("Successfully fetched config from local Supabase instance.");
-                    } else {
-                        throw new Error("Invalid config object received from local server.");
-                    }
-                } catch (fetchError) {
-                    console.warn("Could not fetch config from local Supabase instance. Please ensure it's running via `supabase start`.", fetchError);
-                    // Proceed to the final check, which will likely fail and show the setup instructions.
+            // Production-first approach: Fetch config from the backend.
+            // This assumes a reverse proxy forwards /functions/v1/* to the Supabase instance.
+            const response = await fetch('/functions/v1/get-config');
+            if (response.ok) {
+                const config = await response.json();
+                if (config.supabaseUrl && config.supabaseAnonKey) {
+                    supabaseUrl = config.supabaseUrl;
+                    supabaseAnonKey = config.supabaseAnonKey;
+                } else {
+                     console.warn("Fetched config from backend is incomplete.");
                 }
+            } else {
+                 console.warn(`Failed to fetch config from backend (status: ${response.status}), falling back to local environment variables.`);
             }
-
-            if (!supabaseUrl || !supabaseAnonKey) {
-                throw new Error('[Configuration Error] Supabase URL/Key missing. Please set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in your .env.local file, or ensure `supabase start` is running correctly.');
-            }
-            
-            supabaseClient = createClient(supabaseUrl, supabaseAnonKey);
-
         } catch (error) {
-            console.error("Supabase client initialization failed:", error);
-            initializePromise = null; // Allow retries on subsequent calls
-            throw error; // Re-throw to be caught by the App component
+            console.warn("Could not fetch config from backend, falling back to local environment variables. Error:", error);
         }
+
+        // Fallback for local development using Vite's env variables.
+        if (!supabaseUrl || !supabaseAnonKey) {
+            supabaseUrl = (import.meta as any)?.env?.VITE_SUPABASE_URL;
+            supabaseAnonKey = (import.meta as any)?.env?.VITE_SUPABASE_ANON_KEY;
+        }
+
+        if (!supabaseUrl || !supabaseAnonKey) {
+            initializePromise = null; // Reset for future retries
+            throw new Error("[Configuration Error] VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY are missing. Please create a .env.local file in the project root and add these values. Refer to the README.md for setup instructions.");
+        }
+
+        try {
+            supabaseClient = createClient(supabaseUrl, supabaseAnonKey);
+        } catch (error) {
+             initializePromise = null;
+             console.error("Supabase client initialization failed:", error.message);
+             throw error;
+        }
+
     })();
 
     return initializePromise;
 };
+
 
 /**
  * Returns the initialized singleton Supabase client.
  * @returns {SupabaseClient} The Supabase client instance.
  * @throws {Error} If the client has not been initialized yet.
  */
-export const getSupabaseClient = (): SupabaseClient => {
+const getSupabaseClient = (): SupabaseClient => {
     if (!supabaseClient) {
         throw new Error('Supabase client has not been initialized. Call initializeSupabaseClient and await its result first.');
     }
@@ -97,7 +100,7 @@ const mapPredictionToHistoryItem = (rawPrediction: RawPrediction): HistoryItem =
 };
 
 
-export const getPredictionHistory = async (): Promise<HistoryItem[]> => {
+const getPredictionHistory = async (): Promise<HistoryItem[]> => {
     const supabase = getSupabaseClient();
     const { data, error } = await supabase
         .from('predictions')
@@ -111,7 +114,7 @@ export const getPredictionHistory = async (): Promise<HistoryItem[]> => {
     return (data || []).map(mapPredictionToHistoryItem);
 };
 
-export const getAccuracyStats = async (): Promise<AccuracyStats> => {
+const getAccuracyStats = async (): Promise<AccuracyStats> => {
     const supabase = getSupabaseClient();
     const { data, error } = await supabase
         .from('predictions')
@@ -128,7 +131,7 @@ export const getAccuracyStats = async (): Promise<AccuracyStats> => {
     };
 };
 
-export const updatePredictionStatus = async (id: string, status: 'won' | 'lost'): Promise<void> => {
+const updatePredictionStatus = async (id: string, status: 'won' | 'lost'): Promise<void> => {
     const supabase = getSupabaseClient();
     const { error } = await supabase
         .from('predictions')
@@ -139,4 +142,12 @@ export const updatePredictionStatus = async (id: string, status: 'won' | 'lost')
     if (error) {
         throw new Error(`[Database Error] Could not update the prediction status: ${error.message}`);
     }
+};
+
+export {
+    initializeSupabaseClient,
+    getSupabaseClient,
+    getPredictionHistory,
+    getAccuracyStats,
+    updatePredictionStatus,
 };

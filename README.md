@@ -4,6 +4,12 @@
 
 ![AI Football Tipster Screenshot](https://storage.googleapis.com/aistudio-hosting/readme-assets/ai-football-tipster/screenshot.png)
 
+## Architecture Note: Supabase vs. Netlify
+
+**This project is built to use Supabase for all backend services**, including the database and serverless Edge Functions, as described in the setup guides below.
+
+You may notice a `netlify` folder in the project structure. This contains legacy files from a previous architectural iteration and is **not used** in the current version of the application. Please disregard the contents of the `netlify` folder and follow the Supabase instructions for development and deployment.
+
 ## ✨ Core Features
 
 -   **🤖 AI-Powered Predictions**: Utilizes Google's Gemini Pro model to generate nuanced match predictions.
@@ -53,7 +59,9 @@ supabase login
 
 ### 3. Set Up Environment Variables
 
-This project uses a single `.env.local` file in the root directory for both the frontend (Vite) and backend (Supabase Functions).
+This project requires two separate environment files for local development:
+-   `.env.local` for the frontend (Vite).
+-   `supabase/functions/.env` for the backend (Supabase Edge Functions).
 
 **First, start Supabase to get your local keys:**
 ```bash
@@ -64,13 +72,15 @@ supabase start
 After running the command, look for the following output in your terminal:
 ```
 API URL: http://127.0.0.1:54321
-...
-anon key: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+anon key: your_local_anon_key_...
+service_role key: your_local_service_role_key_...
 ```
-You will need these two values for the next step. Keep the `supabase start` process running.
+You will need these values for the next step. Keep the `supabase start` process running.
 
-**Next, create your `.env.local` file:**
-In a new terminal, create a file named `.env.local` in the project root and add the following, replacing the placeholder values with the ones from the `supabase start` output and your personal API keys.
+**Next, create the environment files:**
+
+**A) Create Frontend Environment File (`.env.local`)**
+In a new terminal, create a file named `.env.local` in the project root directory and add the following, using the `API URL` and `anon key` from the terminal output:
 
 ```
 # .env.local
@@ -78,6 +88,18 @@ In a new terminal, create a file named `.env.local` in the project root and add 
 # Supabase credentials for the frontend (from `supabase start` output)
 VITE_SUPABASE_URL="http://127.0.0.1:54321"
 VITE_SUPABASE_ANON_KEY="your_local_anon_key_from_the_terminal"
+```
+
+**B) Create Backend Environment File (`supabase/functions/.env`)**
+Create a file named `.env` inside the `supabase/functions/` directory. Add your secret API keys and the Supabase credentials here. This file is automatically loaded when you run `supabase start` or `supabase functions serve`.
+
+```
+# supabase/functions/.env
+
+# These are automatically used by the Supabase CLI for local development
+SUPABASE_URL="http://127.0.0.1:54321"
+SUPABASE_ANON_KEY="your_local_anon_key_from_the_terminal"
+SUPABASE_SERVICE_ROLE_KEY="your_local_service_role_key_from_the_terminal"
 
 # Google Gemini API Key for AI Predictions
 # Get it from Google AI Studio: https://aistudio.google.com/app/apikey

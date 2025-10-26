@@ -58,6 +58,8 @@ export interface GoalProbabilities {
 export interface PredictionResultData {
   prediction: string;
   confidence: string;
+  teamA_winProbability: string; // e.g. "60%"
+  teamB_winProbability: string; // e.g. "15%"
   drawProbability: string;
   analysis: string;
   keyStats: KeyStats;

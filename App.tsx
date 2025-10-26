@@ -44,7 +44,7 @@ const App: React.FC = () => {
     const [predictionResult, setPredictionResult] = useState<HistoryItem | null>(null);
     const [isLoading, setIsLoading] = useState<boolean>(false);
     const [error, setError] = useState<string | null>(null);
-    const [appStatus, setAppStatus] = useState<'initializing' | 'ready' | 'config_error'>('initializing');
+    const [appStatus, setAppStatus] = useState<'initializing' | 'ready' | 'config_error' | 'error'>('initializing');
     const [initError, setInitError] = useState<string | null>(null);
     const [history, setHistory] = useState<HistoryItem[]>([]);
     const [accuracyStats, setAccuracyStats] = useState<AccuracyStats>({ total: 0, wins: 0 });
@@ -87,7 +87,6 @@ const App: React.FC = () => {
         const initializeApp = async () => {
             try {
                 // Step 1: Asynchronously initialize the Supabase client.
-                // This now handles fetching config from a local server if .env vars are missing.
                 await initializeSupabaseClient();
                 
                 // Step 2: Once the client is ready, fetch the initial data.
@@ -103,7 +102,7 @@ const App: React.FC = () => {
                     // For any other initialization errors (e.g., database connection).
                     console.error("Initialization failed:", err);
                     setInitError(errorMessage);
-                    setAppStatus('ready'); // Show the main app but with an error banner.
+                    setAppStatus('error');
                 }
             }
         };
@@ -257,17 +256,22 @@ const App: React.FC = () => {
         if (appStatus === 'config_error') {
             return <SetupInstructions error={initError} />;
         }
+        
+        if (appStatus === 'error') {
+            return (
+                 <div className="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                    <div className="p-4 bg-red-100 dark:bg-red-900/50 border border-red-400 dark:border-red-500 rounded-lg text-red-800 dark:text-red-300 text-center animate-fade-in flex items-center justify-center gap-3">
+                        <WarningIcon className="h-6 w-6" />
+                        <p className="font-semibold">Failed to load application: {initError}</p>
+                    </div>
+                </div>
+            )
+        }
+
 
         // appStatus is 'ready' from here on.
         return (
             <div className="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-                {initError && (
-                    <div className="mb-8 p-4 bg-red-100 dark:bg-red-900/50 border border-red-400 dark:border-red-500 rounded-lg text-red-800 dark:text-red-300 text-center animate-fade-in flex items-center gap-3">
-                        <WarningIcon className="h-6 w-6" />
-                        <p className="font-semibold">{initError}</p>
-                    </div>
-                )}
-                
                 <div className="lg:grid lg:grid-cols-3 lg:gap-8">
                     <div className="lg:col-span-2 space-y-8">
                         <div className="bg-white dark:bg-gray-800/50 backdrop-blur-sm border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg p-6 sm:p-8 animate-fade-in-down">
@@ -329,7 +333,7 @@ const App: React.FC = () => {
 
                     </div>
                     <div className="lg:col-span-1 space-y-8 mt-8 lg:mt-0">
-                        <LiveScores disabled={appStatus === 'config_error'} />
+                        <LiveScores disabled={!!initError} />
                         <DonationBlock />
                     </div>
                 </div>

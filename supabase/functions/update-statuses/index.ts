@@ -1,9 +1,9 @@
 // supabase/functions/update-statuses/index.ts
 
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts'
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { corsHeaders } from '../_shared/cors.ts'
 import { normalizeTeamName } from '../_shared/teamNameNormalizer.ts'
+import { supabaseAdminClient as supabase } from '../_shared/init.ts'
 
 // Fix for "Cannot find name 'Deno'" error in Supabase Edge Functions.
 declare const Deno: any;
@@ -78,15 +78,12 @@ serve(async (req: Request) => {
   }
 
   try {
-    const supabaseUrl = Deno.env.get('SUPABASE_URL');
-    const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
     const apiKey = Deno.env.get('THESPORTSDB_API_KEY');
 
-    if (!apiKey || !supabaseUrl || !serviceRoleKey) {
+    if (!apiKey) {
         throw new Error('[Configuration Error] Server configuration is incomplete.');
     }
 
-    const supabase = createClient(supabaseUrl, serviceRoleKey);
     const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
     
     const { data: pendingPredictions, error: fetchError } = await supabase

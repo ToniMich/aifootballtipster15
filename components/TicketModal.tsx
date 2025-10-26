@@ -68,6 +68,22 @@ const TicketModal: React.FC<TicketModalProps> = ({ ticket, onClose }) => {
                     <div className="text-center my-6">
                         <p className="text-sm font-medium text-gray-500 dark:text-gray-400">AI PREDICTION</p>
                         <h3 className="text-4xl font-bold text-green-600 dark:text-green-400 tracking-wide mt-1">{ticket.prediction}</h3>
+                        <div className="mt-3 flex justify-center items-center gap-4 text-sm text-gray-600 dark:text-gray-300">
+                            <div>
+                                <span className="font-bold">{ticket.teamA_winProbability || '-'}</span>
+                                <span className="text-xs text-gray-500"> {ticket.teamA}</span>
+                            </div>
+                            <div className="h-4 w-px bg-gray-300 dark:bg-gray-600"></div>
+                            <div>
+                                <span className="font-bold">{ticket.drawProbability || '-'}</span>
+                                <span className="text-xs text-gray-500"> Draw</span>
+                            </div>
+                            <div className="h-4 w-px bg-gray-300 dark:bg-gray-600"></div>
+                            <div>
+                                <span className="font-bold">{ticket.teamB_winProbability || '-'}</span>
+                                <span className="text-xs text-gray-500"> {ticket.teamB}</span>
+                            </div>
+                        </div>
                         <p className="text-sm text-gray-600 dark:text-gray-400 mt-2">
                             Confidence: <span className="font-bold">{ticket.confidence}</span>
                         </p>

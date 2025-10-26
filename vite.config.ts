@@ -5,10 +5,12 @@ import react from '@vitejs/plugin-react'
 export default defineConfig({
   plugins: [react()],
   server: {
-    // Explicitly set the port to 5173 to match the README and avoid ambiguity.
+    // This configuration is for the local Vite development server.
+    // It explicitly sets the port to 5173 to match the setup instructions in README.md.
     port: 5173,
-    // The proxy is no longer needed because the Supabase Edge Functions
-    // are configured with the correct CORS headers, allowing direct
-    // requests from the browser during local development.
+    
+    // NOTE: This project uses Supabase Edge Functions for its backend, as detailed in the README.
+    // There is no server proxy configuration needed here. The frontend communicates directly with
+    // Supabase services using environment variables from the .env.local file.
   },
 })

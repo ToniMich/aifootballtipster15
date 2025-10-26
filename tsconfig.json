@@ -17,6 +17,14 @@
     "noFallthroughCasesInSwitch": true,
     "types": ["vite/client"]
   },
-  "include": ["."],
+  "include": [
+    "**/*.src",
+    "**/*.ts",
+    "**/*.tsx"
+  ],
+  "exclude": [
+    "node_modules",
+    "supabase/functions"
+  ],
   "references": [{ "path": "./tsconfig.node.json" }]
 }

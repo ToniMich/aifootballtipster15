@@ -1,8 +1,8 @@
 // supabase/functions/gemini-predict/index.ts
 
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts'
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
-import { GoogleGenAI, Type } from 'npm:@google/genai';
+import { supabaseAdminClient as supabase } from '../_shared/init.ts'
+import { GoogleGenAI, Type } from '@google/genai';
 
 // Fix for "Cannot find name 'Deno'" error in Supabase Edge Functions.
 declare const Deno: any;
@@ -13,6 +13,8 @@ const predictionSchema = {
     properties: {
         prediction: { type: Type.STRING, description: 'The final match outcome prediction (e.g., "Manchester City to Win", "Draw", "Over 2.5 Goals").' },
         confidence: { type: Type.STRING, description: 'Confidence level for the prediction. Must be one of: "High", "Medium", "Low".' },
+        teamA_winProbability: { type: Type.STRING, description: 'The estimated win probability for Team A, as a percentage (e.g., "60%").' },
+        teamB_winProbability: { type: Type.STRING, description: 'The estimated win probability for Team B, as a percentage (e.g., "15%").' },
         drawProbability: { type: Type.STRING, description: 'The estimated probability of a draw, as a percentage (e.g., "25%").' },
         analysis: { type: Type.STRING, description: 'A detailed, data-driven analysis of the match, explaining the reasoning behind the prediction. Should be at least 3-4 sentences long.' },
         keyStats: {
@@ -51,13 +53,11 @@ const predictionSchema = {
             required: ["0-1", "2-3", "4+"]
         }
     },
-    required: ['prediction', 'confidence', 'drawProbability', 'analysis', 'keyStats', 'bestBets', 'availabilityFactors', 'venue', 'kickoffTime', 'referee', 'leagueContext', 'playerStats', 'goalScorerPredictions', 'goalProbabilities']
+    required: ['prediction', 'confidence', 'teamA_winProbability', 'teamB_winProbability', 'drawProbability', 'analysis', 'keyStats', 'bestBets', 'availabilityFactors', 'venue', 'kickoffTime', 'referee', 'leagueContext', 'playerStats', 'goalScorerPredictions', 'goalProbabilities']
 };
 
 
 serve(async (req: Request) => {
-    const supabaseUrl = Deno.env.get('SUPABASE_URL');
-    const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
     const apiKey = Deno.env.get('API_KEY');
     
     let jobId: string | null = null;
@@ -72,11 +72,10 @@ serve(async (req: Request) => {
 
     const failJob = async (errorMessage: string) => {
         console.error(`Failing job ${jobId}: ${errorMessage}`);
-        if (!jobId || !supabaseUrl || !serviceRoleKey) {
-            console.error("Cannot update job status: Supabase environment variables or Job ID are missing.");
+        if (!jobId) {
+            console.error("Cannot update job status: Job ID is missing.");
             return;
         }
-        const supabase = createClient(supabaseUrl, serviceRoleKey);
         try {
             await supabase.from('predictions').update({ status: 'failed', prediction_data: { error: errorMessage } }).eq('id', jobId);
             console.log(`Successfully marked job ${jobId} as failed in the database.`);
@@ -85,8 +84,8 @@ serve(async (req: Request) => {
         }
     };
 
-    if (!apiKey || !supabaseUrl || !serviceRoleKey) {
-        const errorMsg = '[Configuration Error] Server configuration is incomplete. Ensure SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, and API_KEY are set.';
+    if (!apiKey) {
+        const errorMsg = '[Configuration Error] Server configuration is incomplete. Ensure API_KEY are set.';
         await failJob(errorMsg);
         return new Response(JSON.stringify({ error: "Server configuration error" }), { status: 500 });
     }
@@ -94,16 +93,13 @@ serve(async (req: Request) => {
     try {
         const { teamA, teamB, matchCategory } = body;
         const ai = new GoogleGenAI({ apiKey: apiKey });
-        const supabase = createClient(supabaseUrl, serviceRoleKey);
 
-        // FIX: Removed "Use Google Search extensively" from the prompt as the `googleSearch` tool is incompatible with `responseSchema`.
-        const prompt = `You are a world-class football analyst. Analyze the upcoming ${matchCategory}'s soccer match between ${teamA} and ${teamB}. Provide the most current and relevant information possible, including team news, form, historical data, injuries, suspensions, league context (table position, rivalries), and key player statistics. Your response must be a single, valid JSON object that strictly adheres to the provided schema. Populate all fields with accurate, well-researched data. Do not include any text, markdown, or any other content outside of the JSON object itself.`;
+        const prompt = `You are a world-class football analyst. Analyze the upcoming ${matchCategory}'s soccer match between ${teamA} and ${teamB}. Provide the most current and relevant information possible, including team news, form, historical data, injuries, suspensions, league context (table position, rivalries), and key player statistics. Your response must be a single, valid JSON object that strictly adheres to the provided schema. Populate all fields with accurate, well-researched data. The sum of teamA_winProbability, teamB_winProbability, and drawProbability must equal 100%. Do not include any text, markdown, or any other content outside of the JSON object itself.`;
 
         const response = await ai.models.generateContent({
             model: "gemini-2.5-flash",
             contents: prompt,
             config: {
-                // FIX: Removed `tools: [{ googleSearch: {} }]` as it's incompatible with `responseSchema` and `responseMimeType: "application/json"`.
                 responseMimeType: "application/json",
                 responseSchema: predictionSchema
             },

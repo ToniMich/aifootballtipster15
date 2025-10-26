@@ -1,27 +1,16 @@
 // supabase/functions/generate-prediction-background/index.ts
 
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts'
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
-
-// Fix for "Cannot find name 'Deno'" error in Supabase Edge Functions.
-declare const Deno: any;
+import { supabaseAdminClient } from '../_shared/init.ts'
 
 serve(async (req: Request) => {
     // This function acts as a proxy to trigger the gemini-predict function
     // in a fire-and-forget manner, allowing the initial request to return quickly.
     try {
-        const supabaseUrl = Deno.env.get('SUPABASE_URL');
-        const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
-
-        if (!supabaseUrl || !serviceRoleKey) {
-            throw new Error('[Configuration Error] Supabase credentials for background invocation are not configured.');
-        }
-
-        const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey);
         const body = await req.json();
 
         // Invoke the gemini-predict function without awaiting it.
-        supabaseAdmin.functions.invoke('gemini-predict', {
+        supabaseAdminClient.functions.invoke('gemini-predict', {
             body: body,
         }).catch(err => console.error("Error invoking gemini-predict function:", err.message));
 
