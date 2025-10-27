@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { teamNames } from '../data/teams';
 
 interface TeamInputProps {
+    id?: string;
     value: string;
     onChange: (value: string) => void;
     placeholder: string;
@@ -9,7 +10,7 @@ interface TeamInputProps {
     className?: string;
 }
 
-const TeamInput: React.FC<TeamInputProps> = ({ value, onChange, placeholder, disabled, className }) => {
+const TeamInput: React.FC<TeamInputProps> = ({ id, value, onChange, placeholder, disabled, className }) => {
     const [suggestions, setSuggestions] = useState<string[]>([]);
     const [showSuggestions, setShowSuggestions] = useState(false);
 
@@ -69,6 +70,7 @@ const TeamInput: React.FC<TeamInputProps> = ({ value, onChange, placeholder, dis
     return (
         <div className="relative w-full">
             <input
+                id={id}
                 type="text"
                 value={value}
                 onChange={handleInputChange}

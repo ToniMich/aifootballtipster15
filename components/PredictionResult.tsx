@@ -1,15 +1,17 @@
 import React from 'react';
-import { PredictionResultData, BestBet, PlayerStat, GoalScorerPrediction } from '../types';
+import { PredictionResultData, BestBet, PlayerStat, GoalScorerPrediction, TeamPerformanceStats, HistoryItem } from '../types';
 import { ChartPieIcon, WarningIcon, LocationMarkerIcon, CalendarIcon, WhistleIcon, FireIcon, LightningBoltIcon, TableCellsIcon, TrophyIcon, AssistIcon, CardIcon, TicketIcon } from './icons';
 import TeamLogo from './TeamLogo';
 import SocialShare from './SocialShare';
 import GoalProbabilityChart from './GoalProbabilityChart';
+import TeamPerformanceTracker from './TeamPerformanceTracker';
 
 interface PredictionResultProps {
   result: PredictionResultData | null;
   error: string | null;
   teamA: string;
   teamB: string;
+  teamPerformanceStats: { teamA: TeamPerformanceStats; teamB: TeamPerformanceStats } | null;
 }
 
 const TeamForm: React.FC<{ form: string }> = ({ form = '' }) => {
@@ -181,7 +183,7 @@ const GoalScorerCard: React.FC<{ prediction: GoalScorerPrediction }> = ({ predic
 );
 
 
-const PredictionResult: React.FC<PredictionResultProps> = ({ result, error, teamA, teamB }) => {
+const PredictionResult: React.FC<PredictionResultProps> = ({ result, error, teamA, teamB, teamPerformanceStats }) => {
     if (error) {
         return (
             <div className="p-6 bg-red-100 dark:bg-red-900/50 border border-red-400 dark:border-red-500 rounded-lg text-red-800 dark:text-red-300 animate-fade-in">
@@ -296,6 +298,18 @@ const PredictionResult: React.FC<PredictionResultProps> = ({ result, error, team
                         </div>
                     </div>
                 </section>
+
+                {/* AI Team Performance */}
+                {teamPerformanceStats && (
+                    <TeamPerformanceTracker 
+                        teamA={teamA} 
+                        teamB={teamB} 
+                        statsA={teamPerformanceStats.teamA} 
+                        statsB={teamPerformanceStats.teamB} 
+                        logoA={result.teamA_logo}
+                        logoB={result.teamB_logo}
+                    />
+                )}
 
                 {/* Best Bets */}
                 {result.bestBets && result.bestBets.length > 0 && (

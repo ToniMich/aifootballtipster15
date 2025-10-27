@@ -121,3 +121,10 @@ export interface AccuracyStats {
     total: number;
     wins: number;
 }
+
+// This type defines the structure for a team's aggregated performance stats.
+export interface TeamPerformanceStats {
+  total: number;
+  wins: number;
+  recentOutcomes: Array<HistoryItem['status']>;
+}

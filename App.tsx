@@ -1,6 +1,6 @@
 import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { startPredictionJob, getPredictionResult } from './services/geminiService';
-import { HistoryItem } from './types';
+import { HistoryItem, TeamPerformanceStats } from './types';
 import { initializeSupabaseClient, getPredictionHistory, getAccuracyStats, updatePredictionStatus } from './services/supabaseService';
 import { getTheme, setTheme as saveTheme } from './services/localStorageService';
 import { syncPredictionStatuses } from './services/syncService';
@@ -51,6 +51,7 @@ const App: React.FC = () => {
     const [matchCategory, setMatchCategory] = useState<'men' | 'women'>('men');
     const [selectedTicket, setSelectedTicket] = useState<HistoryItem | null>(null);
     const [isSyncing, setIsSyncing] = useState<boolean>(false);
+    const [teamPerformanceStats, setTeamPerformanceStats] = useState<{ teamA: TeamPerformanceStats; teamB: TeamPerformanceStats } | null>(null);
 
     // Ref to hold the polling interval ID and polling timeout ID
     const pollingIntervalRef = useRef<number | null>(null);
@@ -110,6 +111,33 @@ const App: React.FC = () => {
         }
         saveTheme(theme);
     }, [theme]);
+    
+    useEffect(() => {
+        if (predictionResult && history.length > 0) {
+            const calculateStatsForTeam = (teamName: string): TeamPerformanceStats => {
+                const teamHistory = history.filter(item => 
+                    (item.teamA === teamName || item.teamB === teamName) && (item.status === 'won' || item.status === 'lost')
+                );
+                
+                const wins = teamHistory.filter(item => item.status === 'won').length;
+                
+                const recentOutcomes = teamHistory.slice(0, 5).map(item => item.status);
+    
+                return {
+                    total: teamHistory.length,
+                    wins: wins,
+                    recentOutcomes: recentOutcomes
+                };
+            };
+    
+            setTeamPerformanceStats({
+                teamA: calculateStatsForTeam(predictionResult.teamA),
+                teamB: calculateStatsForTeam(predictionResult.teamB),
+            });
+        } else {
+            setTeamPerformanceStats(null);
+        }
+    }, [predictionResult, history]);
 
     const toggleTheme = () => {
         setTheme(prevTheme => (prevTheme === 'light' ? 'dark' : 'light'));
@@ -253,20 +281,28 @@ const App: React.FC = () => {
                             <div className="space-y-4">
                                 <CategoryToggle selectedCategory={matchCategory} onSelectCategory={setMatchCategory} />
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                    <TeamInput
-                                        value={teamA}
-                                        onChange={setTeamA}
-                                        placeholder="Enter Home Team"
-                                        disabled={isLoading || appStatus === 'failed'}
-                                        className="w-full px-4 py-2 text-base bg-gray-50 dark:bg-gray-900/50 border border-gray-300 dark:border-gray-600 rounded-md focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-colors disabled:opacity-50"
-                                    />
-                                    <TeamInput
-                                        value={teamB}
-                                        onChange={setTeamB}
-                                        placeholder="Enter Away Team"
-                                        disabled={isLoading || appStatus === 'failed'}
-                                        className="w-full px-4 py-2 text-base bg-gray-50 dark:bg-gray-900/50 border border-gray-300 dark:border-gray-600 rounded-md focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-colors disabled:opacity-50"
-                                    />
+                                    <div>
+                                        <label htmlFor="teamA-input" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Home Team</label>
+                                        <TeamInput
+                                            id="teamA-input"
+                                            value={teamA}
+                                            onChange={setTeamA}
+                                            placeholder="e.g., Manchester United"
+                                            disabled={isLoading || appStatus === 'failed'}
+                                            className="w-full px-4 py-2 text-base bg-gray-50 dark:bg-gray-900/50 border border-gray-300 dark:border-gray-600 rounded-md focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-colors disabled:opacity-50"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label htmlFor="teamB-input" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Away Team</label>
+                                        <TeamInput
+                                            id="teamB-input"
+                                            value={teamB}
+                                            onChange={setTeamB}
+                                            placeholder="e.g., Liverpool"
+                                            disabled={isLoading || appStatus === 'failed'}
+                                            className="w-full px-4 py-2 text-base bg-gray-50 dark:bg-gray-900/50 border border-gray-300 dark:border-gray-600 rounded-md focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-colors disabled:opacity-50"
+                                        />
+                                    </div>
                                 </div>
                                 
                                 <div className="pt-2">
@@ -309,7 +345,7 @@ const App: React.FC = () => {
                         
                         {(error || predictionResult) && !isLoading && (
                              <div className="animate-fade-in-down">
-                                <PredictionResult result={predictionResult} error={error} teamA={teamA} teamB={teamB} />
+                                <PredictionResult result={predictionResult} error={error} teamA={teamA} teamB={teamB} teamPerformanceStats={teamPerformanceStats} />
                              </div>
                         )}
 
