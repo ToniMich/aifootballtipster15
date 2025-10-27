@@ -1,14 +1,5 @@
-// Manually define types for Vite's environment variables. This is a robust way to
-// handle cases where TypeScript's default type resolution for 'vite/client' fails,
-// which can occur in some editor or build environments.
-declare global {
-    interface ImportMeta {
-        readonly env: {
-            readonly VITE_SUPABASE_URL: string;
-            readonly VITE_SUPABASE_ANON_KEY: string;
-        }
-    }
-}
+// This file no longer needs a manual declaration for Vite's environment variables,
+// as we are now using the platform's standard secret management.
 
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { HistoryItem, RawPrediction, AccuracyStats, PredictionResultData } from '../types';
@@ -20,56 +11,64 @@ let initializePromise: Promise<void> | null = null;
 
 /**
  * Initializes the singleton Supabase client.
- * This function now exclusively uses Vite's environment variables, which is the
- * standard and most reliable method for both local development (via .env.local)
- * and production builds (via hosting provider's environment variables).
+ * This function now uses `process.env` to securely load credentials, which is
+ * the standard method for this execution environment.
  *
  * @returns {Promise<void>} A promise that resolves when the client is initialized.
  * @throws {Error} If credentials cannot be obtained.
  */
 const initializeSupabaseClient = (): Promise<void> => {
-    if (supabaseClient) {
-        return Promise.resolve();
-    }
+    // If the promise already exists, return it to prevent re-initialization.
     if (initializePromise) {
         return initializePromise;
     }
 
-    initializePromise = (async () => {
-        // Use Vite's import.meta.env to access environment variables on the client-side.
-        const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-        const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
-        
-        // Check if the environment variables are loaded correctly.
-        if (!supabaseUrl || !supabaseAnonKey) {
-            initializePromise = null; // Reset for future retries
-            // Provide a clear error message that aligns with the project's setup instructions.
-            throw new Error("[Configuration Error] VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY are missing. Please create a .env.local file in the project root, add the values, and restart your development server.");
+    // Create a new promise and store it. This ensures the initialization
+    // logic runs only once.
+    initializePromise = new Promise((resolve, reject) => {
+        // If the client is already created, resolve immediately.
+        if (supabaseClient) {
+            return resolve();
         }
 
         try {
-            // Create the Supabase client instance.
-            supabaseClient = createClient(supabaseUrl, supabaseAnonKey);
-        } catch (error) {
-             initializePromise = null; // Reset on failure
-             console.error("Supabase client initialization failed:", error.message);
-             // Re-throw the original error to be caught by the App component.
-             throw error;
-        }
+            // FIX: The execution environment provides secrets on `process.env`.
+            // Switched from `window.aistudio.getSecrets` to `process.env`.
+            // The `(process as any)` cast is used to satisfy TypeScript in a browser-like environment.
+            const supabaseUrl = (process as any).env.VITE_SUPABASE_URL;
+            const supabaseAnonKey = (process as any).env.VITE_SUPABASE_ANON_KEY;
 
-    })();
+            if (!supabaseUrl || !supabaseAnonKey) {
+                throw new Error("[Configuration Error] Supabase URL/Key are missing. Please ensure they are configured in the environment.");
+            }
+
+            supabaseClient = createClient(supabaseUrl, supabaseAnonKey);
+            console.log("Supabase client initialized successfully.");
+            resolve();
+        } catch (error) {
+            console.error("Supabase client initialization failed:", error.message);
+            // In case of failure, reset the promise to allow for future retries.
+            initializePromise = null;
+            reject(error);
+        }
+    });
 
     return initializePromise;
 };
 
 
 /**
- * Returns the initialized singleton Supabase client.
- * @returns {SupabaseClient} The Supabase client instance.
- * @throws {Error} If the client has not been initialized yet.
+ * Returns the initialized singleton Supabase client, awaiting initialization if necessary.
+ * @returns {Promise<SupabaseClient>} A promise resolving to the Supabase client instance.
+ * @throws {Error} If the client fails to initialize.
  */
-const getSupabaseClient = (): SupabaseClient => {
+const getSupabaseClient = async (): Promise<SupabaseClient> => {
+    // This ensures that initialization is triggered if it hasn't been already.
+    // It will wait for the existing `initializePromise` to complete.
+    await initializeSupabaseClient();
     if (!supabaseClient) {
+        // This line should not be reachable if `initializeSupabaseClient` resolves,
+        // but it's a good safeguard.
         throw new Error('Supabase client has not been initialized. Call initializeSupabaseClient and await its result first.');
     }
     return supabaseClient;
@@ -94,7 +93,7 @@ const mapPredictionToHistoryItem = (rawPrediction: RawPrediction): HistoryItem =
 
 
 const getPredictionHistory = async (): Promise<HistoryItem[]> => {
-    const supabase = getSupabaseClient();
+    const supabase = await getSupabaseClient();
     const { data, error } = await supabase
         .from('predictions')
         .select('*')
@@ -108,7 +107,7 @@ const getPredictionHistory = async (): Promise<HistoryItem[]> => {
 };
 
 const getAccuracyStats = async (): Promise<AccuracyStats> => {
-    const supabase = getSupabaseClient();
+    const supabase = await getSupabaseClient();
     const { data, error } = await supabase
         .from('predictions')
         .select('status');
@@ -125,7 +124,7 @@ const getAccuracyStats = async (): Promise<AccuracyStats> => {
 };
 
 const updatePredictionStatus = async (id: string, status: 'won' | 'lost'): Promise<void> => {
-    const supabase = getSupabaseClient();
+    const supabase = await getSupabaseClient();
     const { error } = await supabase
         .from('predictions')
         .update({ status: status })

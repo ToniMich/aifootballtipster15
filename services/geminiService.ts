@@ -11,7 +11,7 @@ import { getSupabaseClient } from './supabaseService';
  * @returns {Promise<{ isCached: boolean; data: any }>} A promise that resolves to either the cached prediction data or a job ID for polling.
  */
 export async function startPredictionJob(teamA: string, teamB: string, matchCategory: 'men' | 'women'): Promise<{ isCached: boolean; data: any }> {
-    const supabase = getSupabaseClient();
+    const supabase = await getSupabaseClient();
     const { data, error } = await supabase.functions.invoke('request-prediction', {
         body: { teamA, teamB, matchCategory },
     });
@@ -29,7 +29,7 @@ export async function startPredictionJob(teamA: string, teamB: string, matchCate
  * @returns {Promise<HistoryItem>} A promise that resolves to the full prediction data once the job is complete.
  */
 export async function getPredictionResult(jobId: string): Promise<any> {
-    const supabase = getSupabaseClient();
+    const supabase = await getSupabaseClient();
     const { data, error } = await supabase.functions.invoke('get-prediction', {
         body: { jobId },
     });

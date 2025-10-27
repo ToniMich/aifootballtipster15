@@ -8,7 +8,7 @@ import { getSupabaseClient } from './supabaseService';
  */
 export async function fetchLiveScores(): Promise<LiveMatch[]> {
     try {
-        const supabase = getSupabaseClient();
+        const supabase = await getSupabaseClient();
         // The body is optional for a GET-like request but is included for consistency.
         const { data, error } = await supabase.functions.invoke('fetch-scores');
 

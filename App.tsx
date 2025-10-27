@@ -6,17 +6,17 @@ import { getTheme, setTheme as saveTheme } from './services/localStorageService'
 import { syncPredictionStatuses } from './services/syncService';
 import Loader from './components/Loader';
 import PredictionResult from './components/PredictionResult';
-import { FTLogoIcon, SunIcon, MoonIcon, WarningIcon } from './components/icons';
+import { FTLogoIcon, SunIcon, MoonIcon } from './components/icons';
 import TeamInput from './components/TeamInput';
 import DonationBlock from './components/DonationBlock';
 import CategoryToggle from './components/CategoryToggle';
 import PredictionHistory from './components/PredictionHistory';
 import PredictionFeed from './components/PredictionFeed';
-import LiveScores from './components/LiveScores';
-import AccuracyTracker from './components/AccuracyTracker';
 import TicketModal from './components/TicketModal';
 import TrackRecord from './components/TrackRecord';
 import Footer from './components/Footer';
+import HeaderAccuracyTracker from './components/HeaderAccuracyTracker';
+import LiveScores from './components/LiveScores';
 
 interface AccuracyStats {
     total: number;
@@ -269,9 +269,9 @@ const App: React.FC = () => {
         
         return (
             <div className="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-                <div className="grid grid-cols-1 lg:grid-cols-5 gap-8">
-                    {/* Main content column */}
-                    <div className="lg:col-span-3 space-y-8">
+                <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
+                    {/* Left column: Predictor and History */}
+                    <div className="space-y-8 lg:col-span-3">
                         <div className="bg-white dark:bg-gray-800/50 backdrop-blur-sm border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg p-6 sm:p-8 animate-fade-in-down">
                             <h2 className="text-center text-3xl font-bold text-gray-900 dark:text-white mb-2">
                                 The Predictor
@@ -349,16 +349,15 @@ const App: React.FC = () => {
                              </div>
                         )}
 
+                        <PredictionFeed tickets={history} />
+                        <TrackRecord history={history} />
                         <PredictionHistory tickets={history} onUpdateStatus={handleUpdatePredictionStatus} onSelectTicket={setSelectedTicket} onSync={handleSync} isSyncing={isSyncing} />
                     </div>
 
-                    {/* Sidebar column */}
-                    <div className="lg:col-span-2 space-y-8">
+                    {/* Right column: Live Scores and Sidebar */}
+                    <div className="space-y-8 lg:col-span-1">
                         <div className="lg:sticky lg:top-28 space-y-8">
-                            <AccuracyTracker total={accuracyStats.total} wins={accuracyStats.wins} />
                             <LiveScores disabled={appStatus === 'failed'} />
-                            <PredictionFeed tickets={history} />
-                            <TrackRecord history={history} />
                             <DonationBlock />
                         </div>
                     </div>
@@ -378,7 +377,9 @@ const App: React.FC = () => {
                                 AI Football Tipster
                             </h1>
                         </div>
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-2 sm:gap-4">
+                            <HeaderAccuracyTracker total={accuracyStats.total} wins={accuracyStats.wins} />
+                            <div className="h-6 w-px bg-gray-200 dark:bg-gray-600 hidden sm:block"></div>
                             <button
                                 onClick={toggleTheme}
                                 className="p-2 rounded-full text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-green-500"

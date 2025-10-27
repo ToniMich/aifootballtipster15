@@ -8,7 +8,7 @@ import { getSupabaseClient } from './supabaseService';
  */
 export async function syncPredictionStatuses(): Promise<string> {
     try {
-        const supabase = getSupabaseClient();
+        const supabase = await getSupabaseClient();
         const { data, error } = await supabase.functions.invoke('update-statuses');
 
         if (error) {
