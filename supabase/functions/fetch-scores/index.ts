@@ -1,7 +1,7 @@
 // supabase/functions/fetch-scores/index.ts
 
 // FIX: Corrected import path for shared utility.
-import { corsHeaders } from '../shared/cors.ts'
+import { corsHeaders } from '../_shared/cors.ts'
 
 // Fix for "Cannot find name 'Deno'" error in Supabase Edge Functions.
 declare const Deno: any;

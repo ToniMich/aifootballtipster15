@@ -277,7 +277,7 @@ const App: React.FC = () => {
                                 The Predictor
                             </h2>
                             <p className="text-center text-gray-600 dark:text-gray-400 mb-6">Enter two teams to get an AI-powered match analysis.</p>
-
+                            
                             <div className="space-y-4">
                                 <CategoryToggle selectedCategory={matchCategory} onSelectCategory={setMatchCategory} />
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -288,7 +288,7 @@ const App: React.FC = () => {
                                             value={teamA}
                                             onChange={setTeamA}
                                             placeholder="e.g., Manchester United"
-                                            disabled={isLoading || appStatus === 'failed'}
+                                            disabled={isLoading}
                                             className="w-full px-4 py-2 text-base bg-gray-50 dark:bg-gray-900/50 border border-gray-300 dark:border-gray-600 rounded-md focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-colors disabled:opacity-50"
                                         />
                                     </div>
@@ -299,7 +299,7 @@ const App: React.FC = () => {
                                             value={teamB}
                                             onChange={setTeamB}
                                             placeholder="e.g., Liverpool"
-                                            disabled={isLoading || appStatus === 'failed'}
+                                            disabled={isLoading}
                                             className="w-full px-4 py-2 text-base bg-gray-50 dark:bg-gray-900/50 border border-gray-300 dark:border-gray-600 rounded-md focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-colors disabled:opacity-50"
                                         />
                                     </div>
@@ -332,7 +332,7 @@ const App: React.FC = () => {
                                         <button
                                             onClick={handlePredict}
                                             className="w-full bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white font-bold py-3 px-4 rounded-lg transition-all duration-300 transform hover:scale-105 shadow-lg hover:shadow-green-500/40 focus:outline-none focus:ring-4 focus:ring-green-500/50 disabled:bg-gray-400 disabled:cursor-not-allowed disabled:transform-none disabled:shadow-none"
-                                            disabled={!teamA || !teamB || appStatus === 'failed'}
+                                            disabled={!teamA || !teamB}
                                         >
                                             Get AI Prediction
                                         </button>

@@ -21,10 +21,12 @@ const PerformanceStat: React.FC<{ label: string; value: string | number; }> = ({
 
 const RecentOutcomeIcon: React.FC<{ status: HistoryItem['status'] }> = ({ status }) => {
     if (status === 'won') {
-        return <CheckCircleIcon className="h-5 w-5 text-green-500" title="Correct Prediction" />;
+        // FIX: Wrap icon in a span to apply the title attribute, as the icon component does not accept a 'title' prop.
+        return <span title="Correct Prediction"><CheckCircleIcon className="h-5 w-5 text-green-500" /></span>;
     }
     if (status === 'lost') {
-        return <XMarkIcon className="h-5 w-5 text-red-500" title="Incorrect Prediction" />;
+        // FIX: Wrap icon in a span to apply the title attribute, as the icon component does not accept a 'title' prop.
+        return <span title="Incorrect Prediction"><XMarkIcon className="h-5 w-5 text-red-500" /></span>;
     }
     return null;
 };
