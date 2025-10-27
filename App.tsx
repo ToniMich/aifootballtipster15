@@ -6,7 +6,7 @@ import { getTheme, setTheme as saveTheme } from './services/localStorageService'
 import { syncPredictionStatuses } from './services/syncService';
 import Loader from './components/Loader';
 import PredictionResult from './components/PredictionResult';
-import { FTLogoIcon, SunIcon, MoonIcon } from './components/icons';
+import { FTLogoIcon, SunIcon, MoonIcon, WarningIcon } from './components/icons';
 import TeamInput from './components/TeamInput';
 import DonationBlock from './components/DonationBlock';
 import CategoryToggle from './components/CategoryToggle';
@@ -51,7 +51,6 @@ const App: React.FC = () => {
     const [matchCategory, setMatchCategory] = useState<'men' | 'women'>('men');
     const [selectedTicket, setSelectedTicket] = useState<HistoryItem | null>(null);
     const [isSyncing, setIsSyncing] = useState<boolean>(false);
-    const [syncMessage, setSyncMessage] = useState<string | null>(null);
 
     // Ref to hold the polling interval ID and polling timeout ID
     const pollingIntervalRef = useRef<number | null>(null);
@@ -221,16 +220,13 @@ const App: React.FC = () => {
     
     const handleSync = async () => {
         setIsSyncing(true);
-        setSyncMessage("Checking for results...");
         try {
-            const result = await syncPredictionStatuses();
-            setSyncMessage(result);
+            await syncPredictionStatuses();
             await refreshData();
         } catch (err) {
-            setSyncMessage(err.message);
+            console.error("Sync failed:", err);
         } finally {
             setIsSyncing(false);
-            setTimeout(() => setSyncMessage(null), 5000);
         }
     };
 
@@ -272,6 +268,7 @@ const App: React.FC = () => {
                                         className="w-full px-4 py-2 text-base bg-gray-50 dark:bg-gray-900/50 border border-gray-300 dark:border-gray-600 rounded-md focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-colors disabled:opacity-50"
                                     />
                                 </div>
+                                
                                 <div className="pt-2">
                                     {isLoading ? (
                                         <div className="flex items-center gap-4">
@@ -346,9 +343,6 @@ const App: React.FC = () => {
                             </h1>
                         </div>
                         <div className="flex items-center gap-2">
-                             {syncMessage && (
-                                <span className="hidden md:inline-block text-sm text-gray-600 dark:text-gray-400 font-medium animate-fade-in">{syncMessage}</span>
-                             )}
                             <button
                                 onClick={toggleTheme}
                                 className="p-2 rounded-full text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-green-500"

@@ -1,8 +1,9 @@
 // supabase/functions/gemini-predict/index.ts
 
-import { supabaseAdminClient as supabase } from '../_shared/init.ts'
+// FIX: Corrected import paths for shared utilities.
+import { supabaseAdminClient as supabase } from '../shared/init.ts'
 import { GoogleGenAI, Type } from 'npm:@google/genai@1.24.0';
-import { corsHeaders } from "../_shared/cors.ts";
+import { corsHeaders } from "../shared/cors.ts";
 
 // Fix for "Cannot find name 'Deno'" error in Supabase Edge Functions.
 declare const Deno: any;
