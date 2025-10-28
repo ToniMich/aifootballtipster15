@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useEffect, useRef } from 'react';
-import { startPredictionJob, getPredictionResult } from './services/geminiService';
+import { startPredictionJob, getPredictionResult, getPredictionDirectlyFromGemini } from './services/geminiService';
 import { HistoryItem, TeamPerformanceStats, PredictionResultData } from './types';
 import { initializeSupabaseClient, getPredictionHistory, getAccuracyStats, updatePredictionStatus, mapPredictionToHistoryItem } from './services/supabaseService';
 import { getTheme, setTheme as saveTheme } from './services/localStorageService';
@@ -153,10 +153,10 @@ const App: React.FC = () => {
         setPredictionResult(null);
         clearPolling();
     
+        const trimmedA = teamA.trim();
+        const trimmedB = teamB.trim();
+        
         try {
-            const trimmedA = teamA.trim();
-            const trimmedB = teamB.trim();
-            
             // --- Validation Block ---
             const validTeamNameRegex = /^[\p{L}0-9\s.'&()-]+$/u;
             if (!trimmedA || !trimmedB) { throw new Error('Please enter names for both teams.'); }
@@ -165,14 +165,16 @@ const App: React.FC = () => {
             if (trimmedA.toLowerCase() === trimmedB.toLowerCase()) { throw new Error('Please enter two different team names.'); }
             
             console.log(`[AIFootballTipster] Starting prediction for: ${trimmedA} vs ${trimmedB}`);
+            
+            // --- PRIMARY PATH: Use the backend ---
             const { isCached, data } = await startPredictionJob(trimmedA, trimmedB, matchCategory);
 
             if (isCached) {
                 console.log("[AIFootballTipster] Cache hit. Displaying result.");
                 setPredictionResult(mapPredictionToHistoryItem(data));
-                setIsLoading(false); // Stop loading immediately
+                setIsLoading(false);
                 try {
-                    await refreshData(); // Refresh history in the background
+                    await refreshData();
                 } catch (refreshError) {
                     console.warn("Failed to refresh history after cache hit, but showing result anyway:", refreshError);
                 }
@@ -191,12 +193,8 @@ const App: React.FC = () => {
                                 throw new Error(errorMsg);
                             }
                             console.log("[AIFootballTipster] Polling successful. Displaying result.");
-                            
-                            // CORE FIX: Stop loading and show result *before* refreshing history.
                             setPredictionResult(mapPredictionToHistoryItem(result));
                             setIsLoading(false); 
-                            
-                            // Now, refresh the history list in the background. Even if this fails, the user sees their result.
                             try {
                                 await refreshData();
                             } catch (refreshError) {
@@ -210,24 +208,33 @@ const App: React.FC = () => {
                     }
                 };
                 
-                // Start polling immediately and then every 3 seconds.
                 poll(); 
                 pollingIntervalRef.current = window.setInterval(poll, 3000);
 
-                // Set a 90-second timeout for the entire polling process.
-                // This gives the Gemini Pro model ample time for complex analyses.
                 pollingTimeoutRef.current = window.setTimeout(() => {
-                    if (pollingIntervalRef.current) { // Check if it's still running
+                    if (pollingIntervalRef.current) {
                         clearPolling();
                         setError("The request timed out. The server might be busy. Please try again later.");
                         setIsLoading(false);
                     }
                 }, 90000); 
             }
-        } catch (err) {
-            clearPolling();
-            setError(err.message);
-            setIsLoading(false);
+        } catch (backendError) {
+            // This block now catches errors from validation or the backend `startPredictionJob` call.
+            console.warn(`[AIFootballTipster] Backend path failed: ${backendError.message}. Attempting direct Gemini fallback.`);
+
+            // --- FALLBACK PATH: Use direct Gemini call ---
+            try {
+                const directResult = await getPredictionDirectlyFromGemini(trimmedA, trimmedB, matchCategory);
+                setPredictionResult(directResult);
+                setIsLoading(false);
+            } catch (geminiError) {
+                // This catches errors from the fallback itself.
+                console.error(`[AIFootballTipster] Direct Gemini fallback also failed: ${geminiError.message}`);
+                clearPolling();
+                setError(`The backend is unavailable, and the direct AI fallback also failed. Details: ${geminiError.message}`);
+                setIsLoading(false);
+            }
         }
     }, [teamA, teamB, matchCategory, refreshData, clearPolling]);
     
@@ -251,10 +258,6 @@ const App: React.FC = () => {
                 </div>
             );
         }
-
-        // The 'failed' status is no longer reachable on startup, so the error block is removed.
-        // The app now loads into 'ready' state, and connection errors are handled
-        // when a specific backend feature (like prediction) is used.
         
         return (
             <div className="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -344,7 +347,6 @@ const App: React.FC = () => {
                     {/* Right column: Live Scores and Sidebar */}
                     <div className="space-y-8 lg:col-span-1">
                         <div className="lg:sticky lg:top-28 space-y-8">
-                            {/* FIX: The appStatus is narrowed to 'ready' here, so the check `appStatus === 'failed'` was always false, causing a type error. The LiveScores component is only rendered when the app is ready, so it should not be disabled. */}
                             <LiveScores disabled={false} />
                             <DonationBlock />
                         </div>
