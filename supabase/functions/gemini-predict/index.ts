@@ -20,7 +20,22 @@ const predictionSchema = {
         analysis: { type: Type.STRING, description: 'A detailed, data-driven analysis of the match, explaining the reasoning behind the prediction. Should be at least 3-4 sentences long.' },
         keyStats: {
             type: Type.OBJECT,
-            properties: { teamA_form: { type: Type.STRING, description: 'Recent form for Team A as a 5-character string (e.g., "WWDLD").' }, teamB_form: { type: Type.STRING, description: 'Recent form for Team B as a 5-character string (e.g., "LWWWL").' }, head_to_head: { type: Type.STRING, description: 'A summary of the last few head-to-head results between the two teams.' } },
+            properties: {
+                teamA_form: { type: Type.STRING, description: 'Recent form for Team A as a 5-character string (e.g., "WWDLD").' },
+                teamB_form: { type: Type.STRING, description: 'Recent form for Team B as a 5-character string (e.g., "LWWWL").' },
+                head_to_head: {
+                    type: Type.OBJECT,
+                    description: 'A structured breakdown of head-to-head match history.',
+                    properties: {
+                        totalMatches: { type: Type.INTEGER, description: 'Total number of recent H2H matches analyzed (e.g., last 5-10).' },
+                        teamA_wins: { type: Type.INTEGER, description: 'Number of wins for Team A in those matches.' },
+                        draws: { type: Type.INTEGER, description: 'Number of draws in those matches.' },
+                        teamB_wins: { type: Type.INTEGER, description: 'Number of wins for Team B in those matches.' },
+                        summary: { type: Type.STRING, description: 'A brief text summary of the H2H record.' }
+                    },
+                    required: ['totalMatches', 'teamA_wins', 'draws', 'teamB_wins', 'summary']
+                }
+            },
             required: ['teamA_form', 'teamB_form', 'head_to_head']
         },
         bestBets: {
@@ -52,9 +67,27 @@ const predictionSchema = {
             type: Type.OBJECT,
             properties: { "0-1": { type: Type.STRING, description: 'Probability of 0-1 total goals as a percentage.' }, "2-3": { type: Type.STRING, description: 'Probability of 2-3 total goals as a percentage.' }, "4+": { type: Type.STRING, description: 'Probability of 4+ total goals as a percentage.' } },
             required: ["0-1", "2-3", "4+"]
+        },
+        bttsPrediction: {
+            type: Type.OBJECT,
+            description: "Prediction for 'Both Teams to Score'. The sum of probabilities must be 100%.",
+            properties: {
+                yesProbability: { type: Type.STRING, description: 'Probability of YES as a percentage string (e.g., "70%").' },
+                noProbability: { type: Type.STRING, description: 'Probability of NO as a percentage string (e.g., "30%").' }
+            },
+            required: ['yesProbability', 'noProbability']
+        },
+        overUnderPrediction: {
+            type: Type.OBJECT,
+            description: "Prediction for 'Total Goals Over/Under 2.5'. The sum of probabilities must be 100%.",
+            properties: {
+                over25Probability: { type: Type.STRING, description: 'Probability of Over 2.5 goals as a percentage string (e.g., "65%").' },
+                under25Probability: { type: Type.STRING, description: 'Probability of Under 2.5 goals as a percentage string (e.g., "35%").' }
+            },
+            required: ['over25Probability', 'under25Probability']
         }
     },
-    required: ['prediction', 'confidence', 'teamA_winProbability', 'teamB_winProbability', 'drawProbability', 'analysis', 'keyStats', 'bestBets', 'availabilityFactors', 'venue', 'kickoffTime', 'referee', 'leagueContext', 'playerStats', 'goalScorerPredictions', 'goalProbabilities']
+    required: ['prediction', 'confidence', 'teamA_winProbability', 'teamB_winProbability', 'drawProbability', 'analysis', 'keyStats', 'bestBets', 'availabilityFactors', 'venue', 'kickoffTime', 'referee', 'leagueContext', 'playerStats', 'goalScorerPredictions', 'goalProbabilities', 'bttsPrediction', 'overUnderPrediction']
 };
 
 Deno.serve(async (req: Request) => {
@@ -97,13 +130,20 @@ Deno.serve(async (req: Request) => {
         const { teamA, teamB, matchCategory } = body;
         const ai = new GoogleGenAI({ apiKey: apiKey });
 
-        const prompt = `You are a world-class football analyst. Use Google Search to find the most current and relevant information possible and analyze the upcoming ${matchCategory}'s soccer match between ${teamA} and ${teamB}. Your analysis must cover team news, form, historical data, injuries, suspensions, league context (table position, rivalries), and key player statistics. Your response must be a single, valid JSON object that strictly adheres to the provided schema. Populate all fields with accurate, well-researched data from your search results. The sum of teamA_winProbability, teamB_winProbability, and drawProbability must equal 100%. Do not include any text, markdown, or any other content outside of the JSON object itself.`;
+        const prompt = `You are a world-class football analyst. Your primary task is to provide a detailed, data-driven analysis for the upcoming ${matchCategory}'s soccer match between ${teamA} and ${teamB}.
+
+**CRITICAL INSTRUCTIONS:**
+1.  **Player Availability:** You MUST use your most recent internal knowledge to verify player availability. This includes checking for confirmed injuries, suspensions, players on loan, and starters who are doubtful to play.
+2.  **Output Integrity:** Players confirmed to be unavailable for the match (e.g., Cole Palmer injured, Nicolas Jackson on loan) MUST NOT be included in the 'playerStats' or 'goalScorerPredictions' lists.
+3.  **Analysis Context:** The impact of these player absences MUST be discussed in the 'analysis' and 'availabilityFactors' sections, explaining how it affects the team's strategy and the match outcome.
+4.  **Data Consistency:** The sum of win/draw probabilities must equal 100%. The sum of BTTS probabilities must equal 100%. The sum of Over/Under 2.5 probabilities must equal 100%.
+
+Your response MUST be a single, valid JSON object that strictly adheres to the requested schema. Do not include any text, markdown formatting (like \`\`\`json\`), or any other content outside of the JSON object itself.`;
 
         const response = await ai.models.generateContent({
             model: "gemini-2.5-flash",
             contents: prompt,
             config: {
-                tools: [{googleSearch: {}}],
                 responseMimeType: "application/json",
                 responseSchema: predictionSchema
             },
@@ -119,6 +159,7 @@ Deno.serve(async (req: Request) => {
         }
 
         let predictionData = JSON.parse(predictionText);
+        // Grounding chunks are not available without the search tool, so sources will be empty.
         predictionData.sources = response.candidates?.[0]?.groundingMetadata?.groundingChunks?.map((chunk: any) => chunk.web).filter((web: any) => web && web.uri && web.title) || [];
 
         const { error: updateError } = await supabase

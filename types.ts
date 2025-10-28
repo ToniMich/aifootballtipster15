@@ -17,10 +17,19 @@ export interface BestBet {
   underConfidence?: string; // e.g. "20%"
 }
 
+// NEW: For structured H2H data
+export interface HeadToHeadStats {
+  totalMatches: number;
+  teamA_wins: number;
+  draws: number;
+  teamB_wins: number;
+  summary: string;
+}
+
 export interface KeyStats {
   teamA_form: string;
   teamB_form: string;
-  head_to_head: string;
+  head_to_head: HeadToHeadStats; // Changed from string
 }
 
 export interface LeagueContext {
@@ -55,6 +64,19 @@ export interface GoalProbabilities {
   "4+": string; // e.g. "30%"
 }
 
+// NEW: For reliable BTTS data
+export interface BttsPrediction {
+  yesProbability: string; // "70%"
+  noProbability: string; // "30%"
+}
+
+// NEW: For reliable Over/Under data
+export interface OverUnderPrediction {
+  over25Probability: string; // "65%"
+  under25Probability: string; // "35%"
+}
+
+
 export interface PredictionResultData {
   prediction: string;
   confidence: string;
@@ -77,6 +99,8 @@ export interface PredictionResultData {
   goalScorerPredictions?: GoalScorerPrediction[];
   goalProbabilities?: GoalProbabilities; // New field for goal chart
   fromCache?: boolean; // Flag to indicate if the result is from cache
+  bttsPrediction?: BttsPrediction;
+  overUnderPrediction?: OverUnderPrediction;
 }
 
 // This type represents a flattened prediction record, combining

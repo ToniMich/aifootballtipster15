@@ -126,7 +126,7 @@ export const mapPredictionToHistoryItem = (rawPrediction: RawPrediction): Histor
         teamB_winProbability: '0%',
         drawProbability: '0%',
         analysis: 'Analysis not available.',
-        keyStats: { teamA_form: '?????', teamB_form: '?????', head_to_head: 'N/A' },
+        keyStats: { teamA_form: '?????', teamB_form: '?????', head_to_head: { totalMatches: 0, teamA_wins: 0, draws: 0, teamB_wins: 0, summary: 'N/A' } },
         bestBets: [],
         sources: [],
         availabilityFactors: 'N/A',
@@ -140,6 +140,8 @@ export const mapPredictionToHistoryItem = (rawPrediction: RawPrediction): Histor
         goalScorerPredictions: [],
         goalProbabilities: { "0-1": '0%', "2-3": '0%', "4+": '0%' },
         fromCache: false,
+        bttsPrediction: { yesProbability: '0%', noProbability: '0%' },
+        overUnderPrediction: { over25Probability: '0%', under25Probability: '0%' },
     };
 
     // Construct the final object property by property, avoiding the ambiguous `...predictionData` spread.
@@ -160,9 +162,15 @@ export const mapPredictionToHistoryItem = (rawPrediction: RawPrediction): Histor
         fromCache: predictionData.fromCache ?? defaults.fromCache,
 
         // For nested objects, safely merge them with defaults.
-        keyStats: { ...defaults.keyStats, ...(predictionData.keyStats || {}) },
+        keyStats: {
+            ...defaults.keyStats,
+            ...(predictionData.keyStats || {}),
+            head_to_head: { ...defaults.keyStats.head_to_head, ...(predictionData.keyStats?.head_to_head || {}) }
+        },
         leagueContext: { ...defaults.leagueContext, ...(predictionData.leagueContext || {}) },
         goalProbabilities: { ...defaults.goalProbabilities, ...(predictionData.goalProbabilities || {}) },
+        bttsPrediction: { ...defaults.bttsPrediction, ...(predictionData.bttsPrediction || {}) },
+        overUnderPrediction: { ...defaults.overUnderPrediction, ...(predictionData.overUnderPrediction || {}) },
         
         // For arrays, ensure they are never null, falling back to an empty array.
         bestBets: predictionData.bestBets || defaults.bestBets,
