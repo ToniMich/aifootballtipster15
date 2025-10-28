@@ -3,6 +3,14 @@ import { HistoryItem } from '../types';
 import TeamLogo from './TeamLogo';
 import { FTLogoIcon } from './icons';
 
+// Helper function to safely render content that should be a string or number
+const renderSafely = (content: any, fallback: string | number = 'N/A'): string | number => {
+    if (typeof content === 'string' || typeof content === 'number') {
+        return content;
+    }
+    return fallback;
+};
+
 const FeedItem: React.FC<{ item: HistoryItem }> = ({ item }) => (
   <div className="p-3 bg-gray-50 dark:bg-gray-900/50 rounded-lg flex items-center gap-4">
     <div className="flex-shrink-0">
@@ -11,10 +19,10 @@ const FeedItem: React.FC<{ item: HistoryItem }> = ({ item }) => (
     </div>
     <div className="flex-1">
       <p className="text-sm font-semibold text-gray-800 dark:text-gray-200">
-        {item.teamA} vs {item.teamB}
+        {renderSafely(item.teamA)} vs {renderSafely(item.teamB)}
       </p>
       <p className="text-md font-bold text-green-600 dark:text-green-400">
-        {item.prediction}
+        {renderSafely(item.prediction)}
       </p>
     </div>
     <div className="text-right">
@@ -45,7 +53,7 @@ const PredictionFeed: React.FC<PredictionFeedProps> = ({ tickets }) => {
         </div>
       ) : (
         <div className="p-6 text-center text-gray-500 dark:text-gray-400">
-          <p>The latest predictions will appear here in real-time.</p>
+            <p className="text-sm">The latest predictions from the AI will appear here.</p>
         </div>
       )}
     </div>

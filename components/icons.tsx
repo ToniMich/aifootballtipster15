@@ -17,16 +17,14 @@ export const FTLogoIcon: React.FC<{ className?: string }> = ({ className }) => (
                 <stop offset="100%" stopColor="#22c55e" />
             </linearGradient>
         </defs>
-        <style>
-          {`
+        <style dangerouslySetInnerHTML={{__html: `
             .logo-fill { fill: url(#logo-gradient); }
             .dark .logo-fill { fill: url(#logo-gradient-dark); }
             .ball-fill { fill: url(#logo-gradient); }
             .dark .ball-fill { fill: url(#logo-gradient-dark); }
             .ball-lines { stroke: #fff; opacity: 0.5; }
             .dark .ball-lines { stroke: #1f2937; opacity: 0.6; }
-          `}
-        </style>
+        `}} />
         <g className="logo-fill">
             {/* Main FT Shape */}
             <path d="M66.4,24.1c-4.1,2.1-8.6,3.6-13.4,4.4V23.3h22.8c-1.3-3.6-3.2-6.9-5.7-9.8C68.9,13.3,67.6,18.5,66.4,24.1z" />

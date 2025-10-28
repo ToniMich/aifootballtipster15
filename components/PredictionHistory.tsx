@@ -9,6 +9,14 @@ interface TicketCardProps {
     onSelect: (item: HistoryItem) => void;
 }
 
+// Helper function to safely render content that should be a string or number
+const renderSafely = (content: any, fallback: string | number = 'N/A'): string | number => {
+    if (typeof content === 'string' || typeof content === 'number') {
+        return content;
+    }
+    return fallback;
+};
+
 const TicketCard: React.FC<TicketCardProps> = ({ item, onUpdateStatus, onSelect }) => {
     const statusClasses = {
         won: 'border-l-4 border-green-500',
@@ -29,7 +37,7 @@ const TicketCard: React.FC<TicketCardProps> = ({ item, onUpdateStatus, onSelect 
             role="button"
             tabIndex={0}
             onKeyPress={(e) => (e.key === 'Enter' || e.key === ' ') && onSelect(item)}
-            aria-label={`View details for prediction: ${item.teamA} vs ${item.teamB}`}
+            aria-label={`View details for prediction: ${renderSafely(item.teamA)} vs ${renderSafely(item.teamB)}`}
         >
              {item.tally > 1 && (
                 <div className="absolute top-3 right-3 flex items-center gap-1.5 bg-gray-100 dark:bg-gray-900/50 px-2 py-0.5 rounded-full text-xs font-semibold text-gray-600 dark:text-gray-400" title={`${item.tally} requests`}>
@@ -42,15 +50,15 @@ const TicketCard: React.FC<TicketCardProps> = ({ item, onUpdateStatus, onSelect 
                     <div className="flex items-center gap-3 flex-wrap">
                         <div className="flex items-center gap-2">
                             <TeamLogo logoUrl={item.teamA_logo} teamName={item.teamA} sizeClass="h-6 w-6" />
-                            <p className="text-lg font-semibold text-gray-800 dark:text-gray-200">{item.teamA}</p>
+                            <p className="text-lg font-semibold text-gray-800 dark:text-gray-200">{renderSafely(item.teamA)}</p>
                         </div>
                         <span className="text-gray-400 dark:text-gray-500">vs</span>
                         <div className="flex items-center gap-2">
                             <TeamLogo logoUrl={item.teamB_logo} teamName={item.teamB} sizeClass="h-6 w-6" />
-                            <p className="text-lg font-semibold text-gray-800 dark:text-gray-200">{item.teamB}</p>
+                            <p className="text-lg font-semibold text-gray-800 dark:text-gray-200">{renderSafely(item.teamB)}</p>
                         </div>
                     </div>
-                    <p className="text-xl font-bold text-green-600 dark:text-green-400 mt-2">{item.prediction}</p>
+                    <p className="text-xl font-bold text-green-600 dark:text-green-400 mt-2">{renderSafely(item.prediction)}</p>
                 </div>
                 <div className="text-left sm:text-right flex-shrink-0 space-y-1">
                     <div className={`inline-block px-2 py-0.5 text-xs font-semibold rounded-full ${
@@ -81,7 +89,7 @@ const TicketCard: React.FC<TicketCardProps> = ({ item, onUpdateStatus, onSelect 
                     <button 
                         onClick={() => onUpdateStatus(item.id, 'won')}
                         className="flex items-center gap-1.5 px-3 py-1 text-xs font-semibold text-green-700 bg-green-100 hover:bg-green-200 dark:bg-green-900/50 dark:text-green-300 dark:hover:bg-green-900 rounded-md transition-colors"
-                        aria-label={`Mark prediction for ${item.teamA} vs ${item.teamB} as a win`}
+                        aria-label={`Mark prediction for ${renderSafely(item.teamA)} vs ${renderSafely(item.teamB)} as a win`}
                     >
                         <CheckCircleIcon className="h-4 w-4" />
                         Mark as Win
@@ -89,7 +97,7 @@ const TicketCard: React.FC<TicketCardProps> = ({ item, onUpdateStatus, onSelect 
                     <button
                         onClick={() => onUpdateStatus(item.id, 'lost')}
                         className="flex items-center gap-1.5 px-3 py-1 text-xs font-semibold text-red-700 bg-red-100 hover:bg-red-200 dark:bg-red-900/50 dark:text-red-300 dark:hover:bg-red-900 rounded-md transition-colors"
-                        aria-label={`Mark prediction for ${item.teamA} vs ${item.teamB} as a loss`}
+                        aria-label={`Mark prediction for ${renderSafely(item.teamA)} vs ${renderSafely(item.teamB)} as a loss`}
                     >
                         <XMarkIcon className="h-4 w-4" />
                         Mark as Loss
@@ -134,8 +142,9 @@ const PredictionHistory: React.FC<PredictionHistoryProps> = ({ tickets, onUpdate
                 </div>
             ) : (
                 <div className="text-center py-10 px-4 bg-white dark:bg-gray-800/50 border border-dashed border-gray-300 dark:border-gray-600 rounded-lg">
-                    <p className="text-gray-600 dark:text-gray-400 font-medium">Your predictions will appear here once generated.</p>
-                    <p className="text-sm text-gray-500 dark:text-gray-500 mt-1">Make a prediction to get started!</p>
+                    <TicketIcon className="mx-auto h-12 w-12 text-gray-400" />
+                    <h3 className="mt-2 text-sm font-semibold text-gray-900 dark:text-white">No predictions yet</h3>
+                    <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">Your prediction history will appear here.</p>
                 </div>
             )}
         </div>

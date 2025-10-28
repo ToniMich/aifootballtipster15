@@ -63,9 +63,9 @@ const TrackRecord: React.FC<TrackRecordProps> = ({ history }) => {
                 <TicketIcon className="h-7 w-7 text-green-600 dark:text-green-300" />
                 <h3 className="text-2xl font-bold text-gray-900 dark:text-white">Recent Performance</h3>
             </div>
-            <p className="text-center text-gray-500 dark:text-gray-400 py-4">
-                No completed predictions yet. Mark some predictions as 'won' or 'lost' to see performance stats.
-            </p>
+            <div className="text-center text-gray-500 dark:text-gray-400 py-4">
+                <p>Make a prediction to see the AI's performance track record.</p>
+            </div>
         </div>
     );
   }
@@ -78,21 +78,21 @@ const TrackRecord: React.FC<TrackRecordProps> = ({ history }) => {
       </div>
       <div className="flex flex-col md:flex-row gap-4">
         <StatCard 
-            icon={<FireIcon className="h-6 w-6 text-white"/>}
+            icon={<FireIcon className="h-6 w-6 text-white" />}
             value={streak > 0 ? `${streakType}${streak}` : 'N/A'}
             label="Current Streak"
             sublabel={streak > 0 ? (streakType === 'W' ? 'Winning Streak' : 'Losing Streak') : 'No active streak'}
             colorClass={streakType === 'W' ? 'bg-green-500' : streakType === 'L' ? 'bg-red-500' : 'bg-gray-500'}
         />
          <StatCard 
-            icon={<LightningBoltIcon className="h-6 w-6 text-white"/>}
+            icon={<LightningBoltIcon className="h-6 w-6 text-white" />}
             value={`${winsRecent}/${totalRecent}`}
             label="Recent Form"
             sublabel={totalRecent > 0 ? `Wins in last ${totalRecent} games` : 'No recent games'}
             colorClass="bg-blue-500"
         />
         <StatCard 
-            icon={<TrophyIcon className="h-6 w-6 text-white"/>}
+            icon={<TrophyIcon className="h-6 w-6 text-white" />}
             value={`${bestBetAccuracy}%`}
             label="Best Bet Acc."
             sublabel={matchWinnerBets.length > 0 ? `'Match Winner' picks` : 'No winner bets yet'}

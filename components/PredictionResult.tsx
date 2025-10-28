@@ -14,7 +14,16 @@ interface PredictionResultProps {
   teamPerformanceStats: { teamA: TeamPerformanceStats; teamB: TeamPerformanceStats } | null;
 }
 
-const TeamForm: React.FC<{ form: string }> = ({ form = '' }) => {
+// Helper function to safely render content that should be a string or number
+const renderSafely = (content: any, fallback: string | number = 'N/A'): string | number => {
+    if (typeof content === 'string' || typeof content === 'number') {
+        return content;
+    }
+    // Return the fallback if content is not a renderable primitive
+    return fallback;
+};
+
+const TeamForm: React.FC<{ form: string }> = ({ form }) => {
     const getFormColor = (result: string) => {
         switch (result.toUpperCase()) {
             case 'W': return 'bg-green-500';
@@ -24,9 +33,14 @@ const TeamForm: React.FC<{ form: string }> = ({ form = '' }) => {
         }
     };
     
+    // Improved robustness: Ensure 'form' is always a string.
+    if (typeof form !== 'string') {
+        form = '?????';
+    }
+
     return (
         <div className="flex gap-1.5">
-            {(form || '?????').slice(0, 5).split('').map((result, index) => (
+            {form.slice(0, 5).split('').map((result, index) => (
                 <div key={index} className={`h-6 w-6 rounded-full flex items-center justify-center text-white font-bold text-sm shadow-md ${getFormColor(result)}`} title={result === 'W' ? 'Win' : result === 'D' ? 'Draw' : result === 'L' ? 'Loss' : 'Unknown'}>
                     {result.toUpperCase()}
                 </div>
@@ -36,7 +50,7 @@ const TeamForm: React.FC<{ form: string }> = ({ form = '' }) => {
 };
 
 const ConfidenceBar: React.FC<{ confidence: string }> = ({ confidence }) => {
-    const level = confidence?.toLowerCase() || '';
+    const level = String(confidence || '').toLowerCase();
     
     const levels = [
         { name: 'Low', color: 'bg-orange-500', textColor: 'text-orange-600 dark:text-orange-400' },
@@ -111,14 +125,18 @@ const ConfidenceRing: React.FC<{ percentage: number }> = ({ percentage }) => {
     );
 };
 
-const InfoCard: React.FC<{ icon: React.ReactNode, title: string, value: string | undefined }> = ({ icon, title, value }) => {
-    if (!value) return null;
+const InfoCard: React.FC<{ icon: React.ReactNode, title: string, value: any }> = ({ icon, title, value }) => {
+    const safeValue = renderSafely(value);
+    if (!safeValue || safeValue === 'N/A') return null;
+
     return (
         <div className="flex items-center gap-3 bg-gray-50 dark:bg-gray-900/50 p-3 rounded-lg">
-            <div className="text-green-600 dark:text-green-400">{icon}</div>
+            <div className="text-green-600 dark:text-green-400">
+                {icon}
+            </div>
             <div>
                 <p className="text-xs font-semibold text-gray-500 dark:text-gray-400">{title}</p>
-                <p className="text-sm font-medium text-gray-800 dark:text-gray-200">{value}</p>
+                <p className="text-sm font-medium text-gray-800 dark:text-gray-200">{safeValue}</p>
             </div>
         </div>
     );
@@ -129,17 +147,17 @@ const BestBetCard: React.FC<{ bet: BestBet }> = ({ bet }) => (
     <div className="bg-green-50 dark:bg-green-900/40 border border-green-200 dark:border-green-700/50 rounded-lg p-4 shadow-sm">
         <div className="flex justify-between items-start">
             <div>
-                <p className="text-sm font-semibold text-gray-600 dark:text-gray-300">{bet.category}</p>
-                <p className="text-lg font-bold text-green-700 dark:text-green-300">{bet.value}</p>
+                <p className="text-sm font-semibold text-gray-600 dark:text-gray-300">{renderSafely(bet.category)}</p>
+                <p className="text-lg font-bold text-green-700 dark:text-green-300">{renderSafely(bet.value)}</p>
             </div>
-            <span className="text-sm font-bold bg-green-200 text-green-800 dark:bg-green-800/60 dark:text-green-200 px-2.5 py-1 rounded-full">{bet.confidence}</span>
+            <span className="text-sm font-bold bg-green-200 text-green-800 dark:bg-green-800/60 dark:text-green-200 px-2.5 py-1 rounded-full">{renderSafely(bet.confidence)}</span>
         </div>
-        <p className="text-sm text-gray-700 dark:text-gray-400 mt-2">{bet.reasoning}</p>
+        <p className="text-sm text-gray-700 dark:text-gray-400 mt-2">{renderSafely(bet.reasoning, '')}</p>
     </div>
 );
 
 const PlayerStatsTable: React.FC<{ players: PlayerStat[], teamName: string }> = ({ players, teamName }) => {
-    const teamPlayers = players.filter(p => p.teamName === teamName);
+    const teamPlayers = players.filter(p => p && p.teamName === teamName);
     if (teamPlayers.length === 0) return null;
 
     return (
@@ -155,11 +173,11 @@ const PlayerStatsTable: React.FC<{ players: PlayerStat[], teamName: string }> = 
                 </thead>
                 <tbody>
                     {teamPlayers.map(p => (
-                        <tr key={p.playerName} className="border-b dark:border-gray-700">
-                            <td className="px-4 py-2 font-medium text-gray-900 dark:text-white">{p.playerName}</td>
-                            <td className="px-2 py-2 text-center">{p.goals}</td>
-                            <td className="px-2 py-2 text-center">{p.assists}</td>
-                            <td className="px-2 py-2 text-center">{p.yellowCards}/{p.redCards}</td>
+                        <tr key={String(p.playerName)} className="border-b dark:border-gray-700">
+                            <td className="px-4 py-2 font-medium text-gray-900 dark:text-white">{renderSafely(p.playerName)}</td>
+                            <td className="px-2 py-2 text-center">{renderSafely(p.goals, 0)}</td>
+                            <td className="px-2 py-2 text-center">{renderSafely(p.assists, 0)}</td>
+                            <td className="px-2 py-2 text-center">{`${renderSafely(p.yellowCards, 0)}/${renderSafely(p.redCards, 0)}`}</td>
                         </tr>
                     ))}
                 </tbody>
@@ -171,14 +189,14 @@ const PlayerStatsTable: React.FC<{ players: PlayerStat[], teamName: string }> = 
 const GoalScorerCard: React.FC<{ prediction: GoalScorerPrediction }> = ({ prediction }) => (
     <div className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-900/50 rounded-lg">
         <div>
-            <p className="font-semibold text-gray-800 dark:text-gray-200">{prediction.playerName}</p>
-            <p className="text-xs text-gray-500 dark:text-gray-400">{prediction.reasoning}</p>
+            <p className="font-semibold text-gray-800 dark:text-gray-200">{renderSafely(prediction.playerName)}</p>
+            <p className="text-xs text-gray-500 dark:text-gray-400">{renderSafely(prediction.reasoning, '')}</p>
         </div>
         <span className={`text-xs font-bold px-2 py-1 rounded-full ${
             prediction.probability === 'High' ? 'bg-green-200 text-green-800 dark:bg-green-800/60 dark:text-green-200' :
             prediction.probability === 'Medium' ? 'bg-yellow-200 text-yellow-800 dark:bg-yellow-800/60 dark:text-yellow-200' :
             'bg-orange-200 text-orange-800 dark:bg-orange-800/60 dark:text-orange-200'
-        }`}>{prediction.probability}</span>
+        }`}>{renderSafely(prediction.probability)}</span>
     </div>
 );
 
@@ -202,30 +220,34 @@ const PredictionResult: React.FC<PredictionResultProps> = ({ result, error, team
         return null;
     }
     
-    const probA = parseInt(result.teamA_winProbability, 10) || 0;
-    const probB = parseInt(result.teamB_winProbability, 10) || 0;
-    const probDraw = parseInt(result.drawProbability, 10) || 0;
+    const probA = parseInt(String(result.teamA_winProbability), 10) || 0;
+    const probB = parseInt(String(result.teamB_winProbability), 10) || 0;
+    const probDraw = parseInt(String(result.drawProbability), 10) || 0;
 
     return (
         <div className="bg-white dark:bg-gray-800/50 backdrop-blur-sm border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg animate-fade-in overflow-hidden">
             {/* Header */}
             <div className="p-6 bg-gray-50 dark:bg-gray-900/50 border-b border-gray-200 dark:border-gray-700">
-                {result.fromCache && (
-                    <div className="mb-4 text-xs font-semibold text-center text-blue-600 dark:text-blue-400 bg-blue-100 dark:bg-blue-900/50 py-1 px-3 rounded-full w-fit mx-auto">
-                        Retrieved from recent history
-                    </div>
-                )}
                 <div className="space-y-4">
-                    {/* Team Info */}
-                    <div className="flex justify-between items-center text-center">
-                        <div className="flex-1 flex flex-col items-center gap-2">
-                        <TeamLogo logoUrl={result.teamA_logo} teamName={teamA} sizeClass="h-14 w-14 md:h-16 md:w-16" />
-                        <h3 className="text-lg md:text-xl font-bold text-gray-800 dark:text-gray-200">{teamA}</h3>
+                    {/* Team Info - RE-ENGINEERED WITH CSS GRID */}
+                    <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-4 text-center">
+                        {/* Team A */}
+                        <div className="flex flex-col items-center justify-start gap-3 min-w-0">
+                            <TeamLogo logoUrl={result.teamA_logo} teamName={String(teamA)} sizeClass="h-16 w-16" />
+                            <h3 className="text-xl font-bold text-gray-800 dark:text-gray-200 break-words">
+                                {renderSafely(teamA)}
+                            </h3>
                         </div>
-                        <span className="text-2xl font-light text-gray-400 dark:text-gray-500 mx-2">vs</span>
-                        <div className="flex-1 flex flex-col items-center gap-2">
-                        <TeamLogo logoUrl={result.teamB_logo} teamName={teamB} sizeClass="h-14 w-14 md:h-16 md:w-16" />
-                        <h3 className="text-lg md:text-xl font-bold text-gray-800 dark:text-gray-200">{teamB}</h3>
+                        
+                        {/* VS Separator */}
+                        <span className="text-2xl font-light text-gray-400 dark:text-gray-500">vs</span>
+
+                        {/* Team B */}
+                        <div className="flex flex-col items-center justify-start gap-3 min-w-0">
+                            <TeamLogo logoUrl={result.teamB_logo} teamName={String(teamB)} sizeClass="h-16 w-16" />
+                            <h3 className="text-xl font-bold text-gray-800 dark:text-gray-200 break-words">
+                                {renderSafely(teamB)}
+                            </h3>
                         </div>
                     </div>
 
@@ -240,7 +262,7 @@ const PredictionResult: React.FC<PredictionResultProps> = ({ result, error, team
                         <div
                             className="bg-green-500 transition-all duration-500"
                             style={{ width: `${probA}%` }}
-                            title={`${teamA} Win Probability: ${probA}%`}
+                            title={`${renderSafely(teamA)} Win Probability: ${probA}%`}
                         />
                         <div
                             className="bg-gray-400 dark:bg-gray-500 transition-all duration-500"
@@ -250,13 +272,13 @@ const PredictionResult: React.FC<PredictionResultProps> = ({ result, error, team
                         <div
                             className="bg-blue-500 transition-all duration-500"
                             style={{ width: `${probB}%` }}
-                            title={`${teamB} Win Probability: ${probB}%`}
+                            title={`${renderSafely(teamB)} Win Probability: ${probB}%`}
                         />
                         </div>
                     </div>
                 </div>
                 {result.leagueContext && (
-                    <p className="text-center text-sm font-semibold text-gray-500 dark:text-gray-400 mt-4">{result.leagueContext.leagueName}</p>
+                    <p className="text-center text-sm font-semibold text-gray-500 dark:text-gray-400 mt-4">{renderSafely(result.leagueContext.leagueName, '')}</p>
                 )}
                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 mt-4">
                     <InfoCard icon={<LocationMarkerIcon className="h-5 w-5" />} title="Venue" value={result.venue} />
@@ -271,33 +293,35 @@ const PredictionResult: React.FC<PredictionResultProps> = ({ result, error, team
                 <section>
                     <div className="text-center">
                         <p className="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">AI Prediction</p>
-                        <h2 className="text-3xl md:text-4xl font-bold text-green-600 dark:text-green-400 my-2">{result.prediction}</h2>
+                        <h2 className="text-3xl md:text-4xl font-bold text-green-600 dark:text-green-400 my-2">{renderSafely(result.prediction, 'Prediction Unavailable')}</h2>
                         <ConfidenceBar confidence={result.confidence} />
                     </div>
                     <div className="mt-6 p-4 bg-gray-50 dark:bg-gray-900/50 rounded-lg">
                         <h4 className="font-bold text-gray-800 dark:text-white mb-2">Analyst's Breakdown</h4>
-                        <p className="text-gray-700 dark:text-gray-300 text-base leading-relaxed">{result.analysis}</p>
+                        <p className="text-gray-700 dark:text-gray-300 text-base leading-relaxed">{renderSafely(result.analysis, 'Analysis not available.')}</p>
                     </div>
                 </section>
                 
                 {/* Key Stats */}
-                <section>
-                     <div className="flex items-center gap-3 mb-4">
-                        <LightningBoltIcon className="h-7 w-7 text-green-600 dark:text-green-300" />
-                        <h3 className="text-2xl font-bold text-gray-900 dark:text-white">Key Stats</h3>
-                    </div>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div className="p-4 bg-white dark:bg-gray-800 border dark:border-gray-700 rounded-lg">
-                            <h4 className="font-semibold mb-2">Recent Form</h4>
-                            <div className="flex justify-between items-center"><span>{teamA}</span><TeamForm form={result.keyStats.teamA_form} /></div>
-                            <div className="flex justify-between items-center mt-2"><span>{teamB}</span><TeamForm form={result.keyStats.teamB_form} /></div>
+                {result.keyStats && (
+                    <section>
+                         <div className="flex items-center gap-3 mb-4">
+                            <LightningBoltIcon className="h-7 w-7 text-green-600 dark:text-green-300" />
+                            <h3 className="text-2xl font-bold text-gray-900 dark:text-white">Key Stats</h3>
                         </div>
-                         <div className="p-4 bg-white dark:bg-gray-800 border dark:border-gray-700 rounded-lg">
-                            <h4 className="font-semibold mb-2">Head-to-Head</h4>
-                            <p className="text-sm text-gray-600 dark:text-gray-400">{result.keyStats.head_to_head}</p>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div className="p-4 bg-white dark:bg-gray-800 border dark:border-gray-700 rounded-lg">
+                                <h4 className="font-semibold mb-2">Recent Form</h4>
+                                <div className="flex justify-between items-center"><span>{renderSafely(teamA)}</span><TeamForm form={result.keyStats.teamA_form} /></div>
+                                <div className="flex justify-between items-center mt-2"><span>{renderSafely(teamB)}</span><TeamForm form={result.keyStats.teamB_form} /></div>
+                            </div>
+                             <div className="p-4 bg-white dark:bg-gray-800 border dark:border-gray-700 rounded-lg">
+                                <h4 className="font-semibold mb-2">Head-to-Head</h4>
+                                <p className="text-sm text-gray-600 dark:text-gray-400">{renderSafely(result.keyStats.head_to_head, 'No H2H data.')}</p>
+                            </div>
                         </div>
-                    </div>
-                </section>
+                    </section>
+                )}
 
                 {/* AI Team Performance */}
                 {teamPerformanceStats && (
@@ -319,7 +343,7 @@ const PredictionResult: React.FC<PredictionResultProps> = ({ result, error, team
                             <h3 className="text-2xl font-bold text-gray-900 dark:text-white">Best Bets</h3>
                         </div>
                         <div className="space-y-3">
-                            {result.bestBets.map((bet, index) => <BestBetCard key={index} bet={bet} />)}
+                            {result.bestBets.filter(Boolean).map((bet, index) => <BestBetCard key={index} bet={bet} />)}
                         </div>
                     </section>
                 )}
@@ -337,17 +361,17 @@ const PredictionResult: React.FC<PredictionResultProps> = ({ result, error, team
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                             {result.playerStats && result.playerStats.length > 0 && (
                                 <div>
-                                    <h4 className="font-bold text-lg mb-2 text-center">{teamA} Key Players</h4>
-                                    <PlayerStatsTable players={result.playerStats} teamName={teamA} />
-                                     <h4 className="font-bold text-lg mb-2 mt-4 text-center">{teamB} Key Players</h4>
-                                    <PlayerStatsTable players={result.playerStats} teamName={teamB} />
+                                    <h4 className="font-bold text-lg mb-2 text-center">{renderSafely(teamA)} Key Players</h4>
+                                    <PlayerStatsTable players={result.playerStats.filter(Boolean)} teamName={teamA} />
+                                     <h4 className="font-bold text-lg mb-2 mt-4 text-center">{renderSafely(teamB)} Key Players</h4>
+                                    <PlayerStatsTable players={result.playerStats.filter(Boolean)} teamName={teamB} />
                                 </div>
                             )}
                              {result.goalScorerPredictions && result.goalScorerPredictions.length > 0 && (
                                 <div>
                                     <h4 className="font-bold text-lg mb-2 text-center">Likely Goalscorers</h4>
                                     <div className="space-y-2">
-                                        {result.goalScorerPredictions.map(p => <GoalScorerCard key={p.playerName} prediction={p} />)}
+                                        {result.goalScorerPredictions.filter(Boolean).map(p => <GoalScorerCard key={String(p.playerName)} prediction={p} />)}
                                     </div>
                                 </div>
                             )}
@@ -359,7 +383,7 @@ const PredictionResult: React.FC<PredictionResultProps> = ({ result, error, team
                 {result.availabilityFactors && (
                     <div className="p-4 bg-gray-50 dark:bg-gray-900/50 rounded-lg">
                         <h4 className="font-bold text-gray-800 dark:text-white mb-2">Availability Factors</h4>
-                        <p className="text-gray-700 dark:text-gray-300 text-sm">{result.availabilityFactors}</p>
+                        <p className="text-gray-700 dark:text-gray-300 text-sm">{renderSafely(result.availabilityFactors, '')}</p>
                     </div>
                 )}
                 
@@ -368,9 +392,9 @@ const PredictionResult: React.FC<PredictionResultProps> = ({ result, error, team
                     <div>
                         <h4 className="text-sm font-semibold text-gray-600 dark:text-gray-400 mb-2">Sources</h4>
                         <div className="flex flex-wrap gap-2">
-                            {result.sources.map((source, index) => (
+                            {result.sources.filter(s => s && s.web).map((source, index) => (
                                 <a key={index} href={source.web.uri} target="_blank" rel="noopener noreferrer" className="text-xs bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-300 px-2 py-1 rounded-md hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors">
-                                    {source.web.title}
+                                    {renderSafely(source.web.title)}
                                 </a>
                             ))}
                         </div>

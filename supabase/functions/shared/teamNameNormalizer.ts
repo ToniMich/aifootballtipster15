@@ -53,7 +53,7 @@ const teamNameMapping: Record<string, string> = {
     'getafe': 'Getafe',
     'girona': 'Girona',
     'mallorca': 'Mallorca',
-    'osasuna': 'Osasona',
+    'osasuna': 'Osasuna',
     'rayo vallecano': 'Rayo Vallecano',
     'real betis': 'Real Betis',
     'real madrid': 'Real Madrid',
@@ -84,7 +84,7 @@ const teamNameMapping: Record<string, string> = {
     'bayern munich': 'Bayern Munich',
     'bayern': 'Bayern Munich',
     'borussia dortmund': 'Borussia Dortmund',
-    'dortmund': 'Bor Borussia Dortmund',
+    'dortmund': 'Borussia Dortmund',
     'borussia mönchengladbach': 'Borussia Mönchengladbach',
     'eintracht frankfurt': 'Eintracht Frankfurt',
     'rb leipzig': 'RB Leipzig',
@@ -92,6 +92,7 @@ const teamNameMapping: Record<string, string> = {
     'tsg hoffenheim': 'TSG Hoffenheim',
     'union berlin': 'Union Berlin',
     'vfb stuttgart': 'VfB Stuttgart',
+    'vfl bochum': 'VfL Bochum',
     'vfl wolfsburg': 'VfL Wolfsburg',
 
     // Ligue 1

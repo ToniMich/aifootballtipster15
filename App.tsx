@@ -1,12 +1,12 @@
 import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { startPredictionJob, getPredictionResult } from './services/geminiService';
-import { HistoryItem, TeamPerformanceStats } from './types';
-import { initializeSupabaseClient, getPredictionHistory, getAccuracyStats, updatePredictionStatus } from './services/supabaseService';
+import { HistoryItem, TeamPerformanceStats, PredictionResultData } from './types';
+import { initializeSupabaseClient, getPredictionHistory, getAccuracyStats, updatePredictionStatus, mapPredictionToHistoryItem } from './services/supabaseService';
 import { getTheme, setTheme as saveTheme } from './services/localStorageService';
 import { syncPredictionStatuses } from './services/syncService';
 import Loader from './components/Loader';
 import PredictionResult from './components/PredictionResult';
-import { FTLogoIcon, SunIcon, MoonIcon } from './components/icons';
+import { FTLogoIcon, SunIcon, MoonIcon, WarningIcon } from './components/icons';
 import TeamInput from './components/TeamInput';
 import DonationBlock from './components/DonationBlock';
 import CategoryToggle from './components/CategoryToggle';
@@ -23,21 +23,6 @@ interface AccuracyStats {
     wins: number;
 }
 
-const mapRawToHistoryItem = (raw: any): HistoryItem => {
-    // Ensure prediction_data is an object to prevent errors when spreading
-    const predictionData = raw.prediction_data || {};
-    return {
-        ...predictionData,
-        id: raw.id,
-        teamA: raw.team_a,
-        teamB: raw.team_b,
-        matchCategory: raw.match_category,
-        timestamp: raw.created_at,
-        status: raw.status,
-        tally: raw.tally,
-    };
-};
-
 const App: React.FC = () => {
     const [teamA, setTeamA] = useState<string>('');
     const [teamB, setTeamB] = useState<string>('');
@@ -45,6 +30,7 @@ const App: React.FC = () => {
     const [isLoading, setIsLoading] = useState<boolean>(false);
     const [error, setError] = useState<string | null>(null);
     const [appStatus, setAppStatus] = useState<'initializing' | 'ready' | 'failed'>('initializing');
+    const [initError, setInitError] = useState<string | null>(null);
     const [history, setHistory] = useState<HistoryItem[]>([]);
     const [accuracyStats, setAccuracyStats] = useState<AccuracyStats>({ total: 0, wins: 0 });
     const [theme, setTheme] = useState<'light' | 'dark'>(getTheme());
@@ -89,10 +75,9 @@ const App: React.FC = () => {
                 await refreshData();
                 setAppStatus('ready');
             } catch (err) {
-                const errorMessage = err instanceof Error ? err.message : 'Initialization failed.';
+                const errorMessage = err instanceof Error ? err.message : 'An unknown error occurred during initialization.';
                 console.error("Application initialization failed:", errorMessage);
-                // Set status to failed, but we won't show a blocking UI error.
-                // The app will render, but some features might be disabled.
+                setInitError(errorMessage);
                 setAppStatus('failed');
             }
         };
@@ -184,7 +169,7 @@ const App: React.FC = () => {
 
             if (isCached) {
                 console.log("[AIFootballTipster] Cache hit. Displaying result.");
-                setPredictionResult(mapRawToHistoryItem(data));
+                setPredictionResult(mapPredictionToHistoryItem(data));
                 setIsLoading(false); // Stop loading immediately
                 try {
                     await refreshData(); // Refresh history in the background
@@ -208,7 +193,7 @@ const App: React.FC = () => {
                             console.log("[AIFootballTipster] Polling successful. Displaying result.");
                             
                             // CORE FIX: Stop loading and show result *before* refreshing history.
-                            setPredictionResult(mapRawToHistoryItem(result));
+                            setPredictionResult(mapPredictionToHistoryItem(result));
                             setIsLoading(false); 
                             
                             // Now, refresh the history list in the background. Even if this fails, the user sees their result.
@@ -266,6 +251,26 @@ const App: React.FC = () => {
                 </div>
             );
         }
+
+        if (appStatus === 'failed') {
+            return (
+                <div className="w-full max-w-2xl mx-auto p-4 sm:p-8 text-center bg-white dark:bg-gray-800/50 border border-red-300 dark:border-red-700 rounded-lg shadow-lg animate-fade-in-down">
+                    <WarningIcon className="h-12 w-12 mx-auto text-red-500" />
+                    <h2 className="mt-4 text-2xl font-bold text-gray-900 dark:text-white">Application Error</h2>
+                    <p className="mt-2 text-gray-600 dark:text-gray-400">
+                        The application failed to start correctly and cannot connect to its backend services. Some features will be disabled. This is usually due to a missing configuration.
+                    </p>
+                    {initError && (
+                        <div className="mt-4 text-left">
+                            <p className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1">Error Details:</p>
+                            <pre className="p-3 bg-gray-100 dark:bg-gray-900/50 rounded-md text-sm text-red-600 dark:text-red-400 overflow-x-auto">
+                                <code>{initError}</code>
+                            </pre>
+                        </div>
+                    )}
+                </div>
+            );
+        }
         
         return (
             <div className="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -273,11 +278,9 @@ const App: React.FC = () => {
                     {/* Left column: Predictor and History */}
                     <div className="space-y-8 lg:col-span-3">
                         <div className="bg-white dark:bg-gray-800/50 backdrop-blur-sm border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg p-6 sm:p-8 animate-fade-in-down">
-                            <h2 className="text-center text-3xl font-bold text-gray-900 dark:text-white mb-2">
+                            <h2 className="text-center text-3xl font-bold text-gray-900 dark:text-white mb-6">
                                 The Predictor
                             </h2>
-                            <p className="text-center text-gray-600 dark:text-gray-400 mb-6">Enter two teams to get an AI-powered match analysis.</p>
-                            
                             <div className="space-y-4">
                                 <CategoryToggle selectedCategory={matchCategory} onSelectCategory={setMatchCategory} />
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -357,7 +360,8 @@ const App: React.FC = () => {
                     {/* Right column: Live Scores and Sidebar */}
                     <div className="space-y-8 lg:col-span-1">
                         <div className="lg:sticky lg:top-28 space-y-8">
-                            <LiveScores disabled={appStatus === 'failed'} />
+                            {/* FIX: The appStatus is narrowed to 'ready' here, so the check `appStatus === 'failed'` was always false, causing a type error. The LiveScores component is only rendered when the app is ready, so it should not be disabled. */}
+                            <LiveScores disabled={false} />
                             <DonationBlock />
                         </div>
                     </div>

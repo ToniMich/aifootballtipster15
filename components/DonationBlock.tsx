@@ -8,13 +8,10 @@ const DonationBlock: React.FC = () => {
   return (
     <div className="mt-8 w-full animate-fade-in">
       <div className="bg-gradient-to-br from-blue-50 via-white to-purple-50 dark:from-gray-800 dark:via-gray-800/50 dark:to-gray-900/80 backdrop-blur-sm border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg p-6 text-center">
-        <div className="flex justify-center items-center gap-3 mb-3">
+        <div className="flex justify-center items-center gap-3 mb-5">
             <HeartIcon className="h-7 w-7 text-red-500" />
             <h3 className="text-xl font-bold text-gray-800 dark:text-gray-200">Support the Project</h3>
         </div>
-        <p className="text-gray-600 dark:text-gray-400 mb-5">
-          If you find this tool helpful, please consider supporting its development. Your contributions help keep the servers running and the predictions sharp!
-        </p>
         <div className="flex flex-col sm:flex-row gap-3 justify-center">
              <a
               href="https://paypal.me/gizahhub"

@@ -1,5 +1,5 @@
 import { LiveMatch } from '../types';
-import { getSupabaseClient } from './supabaseService';
+import { getSupabaseClient, isAppConfigured } from './supabaseService';
 
 /**
  * Fetches live soccer scores from the secure backend Supabase Edge Function.
@@ -7,6 +7,11 @@ import { getSupabaseClient } from './supabaseService';
  * @returns {Promise<LiveMatch[]>} A promise that resolves to an array of live matches.
  */
 export async function fetchLiveScores(): Promise<LiveMatch[]> {
+    if (!isAppConfigured()) {
+        console.warn("Live scores disabled: App is in placeholder mode.");
+        return [];
+    }
+    
     try {
         const supabase = await getSupabaseClient();
         // The body is optional for a GET-like request but is included for consistency.

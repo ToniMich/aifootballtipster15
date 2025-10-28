@@ -12,6 +12,14 @@ interface TeamPerformanceTrackerProps {
     logoB?: string;
 }
 
+// Helper function to safely render content that should be a string or number
+const renderSafely = (content: any, fallback: string | number = 'N/A'): string | number => {
+    if (typeof content === 'string' || typeof content === 'number') {
+        return content;
+    }
+    return fallback;
+};
+
 const PerformanceStat: React.FC<{ label: string; value: string | number; }> = ({ label, value }) => (
     <div className="text-center">
         <p className="text-2xl font-bold text-gray-800 dark:text-gray-200">{value}</p>
@@ -21,11 +29,9 @@ const PerformanceStat: React.FC<{ label: string; value: string | number; }> = ({
 
 const RecentOutcomeIcon: React.FC<{ status: HistoryItem['status'] }> = ({ status }) => {
     if (status === 'won') {
-        // FIX: Wrap icon in a span to apply the title attribute, as the icon component does not accept a 'title' prop.
         return <span title="Correct Prediction"><CheckCircleIcon className="h-5 w-5 text-green-500" /></span>;
     }
     if (status === 'lost') {
-        // FIX: Wrap icon in a span to apply the title attribute, as the icon component does not accept a 'title' prop.
         return <span title="Incorrect Prediction"><XMarkIcon className="h-5 w-5 text-red-500" /></span>;
     }
     return null;
@@ -37,7 +43,7 @@ const TeamCard: React.FC<{ teamName: string; teamLogo?: string; stats: TeamPerfo
             <div className="flex-1 p-4 bg-gray-50 dark:bg-gray-900/50 rounded-lg text-center">
                 <div className="flex justify-center items-center gap-2 mb-2">
                     <TeamLogo logoUrl={teamLogo} teamName={teamName} sizeClass="h-8 w-8" />
-                    <h4 className="text-lg font-bold">{teamName}</h4>
+                    <h4 className="text-lg font-bold">{renderSafely(teamName)}</h4>
                 </div>
                 <p className="text-sm text-gray-500 dark:text-gray-400">No prediction history for this team yet.</p>
             </div>
@@ -50,7 +56,7 @@ const TeamCard: React.FC<{ teamName: string; teamLogo?: string; stats: TeamPerfo
         <div className="flex-1 p-4 bg-gray-50 dark:bg-gray-900/50 rounded-lg">
             <div className="flex items-center gap-3 mb-4">
                 <TeamLogo logoUrl={teamLogo} teamName={teamName} sizeClass="h-10 w-10" />
-                <h4 className="text-xl font-bold text-gray-900 dark:text-white">{teamName}</h4>
+                <h4 className="text-xl font-bold text-gray-900 dark:text-white">{renderSafely(teamName)}</h4>
             </div>
             <div className="flex justify-around items-center">
                 <PerformanceStat label="Predictions" value={stats.total} />

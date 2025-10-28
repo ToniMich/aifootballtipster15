@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { LiveMatch } from '../types';
-import { RefreshIcon } from './icons';
+import { RefreshIcon, WarningIcon } from './icons';
 import { fetchLiveScores } from '../services/theSportsDBService';
 
 interface LiveScoresProps {
@@ -96,12 +96,14 @@ const LiveScores: React.FC<LiveScoresProps> = ({ disabled = false }) => {
 
         if (error) {
             return (
-                <div className="p-4 text-center">
-                    <p className="font-semibold text-red-600 dark:text-red-400">{error.replace('[Network Error] Failed to fetch scores: ', '')}</p>
+                <div className="p-4 text-center bg-red-50 dark:bg-red-900/30">
+                    <WarningIcon className="h-6 w-6 text-red-500 mx-auto mb-2" />
+                    <p className="font-semibold text-red-600 dark:text-red-400">Could not load scores</p>
+                    <p className="text-xs text-red-500 dark:text-red-400/80 mb-3">{error.replace('[Network Error] Failed to fetch scores: ', '')}</p>
                     {!disabled && (
                         <button
                             onClick={handleRefresh}
-                            className="mt-4 px-4 py-2 bg-green-600 text-white text-sm font-semibold rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 dark:focus:ring-offset-gray-800 transition-colors"
+                            className="px-3 py-1 bg-red-100 text-red-700 dark:bg-red-900/50 dark:text-red-300 text-sm font-semibold rounded-md hover:bg-red-200 dark:hover:bg-red-900 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 dark:focus:ring-offset-gray-800 transition-colors"
                         >
                             Retry
                         </button>
@@ -112,9 +114,8 @@ const LiveScores: React.FC<LiveScoresProps> = ({ disabled = false }) => {
 
         if (matches.length === 0) {
             return (
-                <div className="p-4 text-center">
-                    <p className="text-gray-500 dark:text-gray-400">No major live soccer matches at the moment.</p>
-                     <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Check back soon or try refreshing.</p>
+                <div className="p-6 text-center">
+                    <p className="text-sm text-gray-500 dark:text-gray-400">No live matches found right now.</p>
                 </div>
             );
         }
@@ -129,7 +130,7 @@ const LiveScores: React.FC<LiveScoresProps> = ({ disabled = false }) => {
     };
     
     return (
-        <div className="w-full lg:sticky lg:top-8 animate-fade-in">
+        <div className="w-full">
              <div className="bg-white dark:bg-gray-800/50 backdrop-blur-sm border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg">
                 <div className="p-4 border-b border-gray-200 dark:border-gray-700 relative">
                     <div className="text-center">

@@ -1,86 +1,154 @@
-// This file no longer needs a manual declaration for Vite's environment variables,
-// as we are now using the platform's standard secret management.
+// services/supabaseService.ts
 
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { HistoryItem, RawPrediction, AccuracyStats, PredictionResultData } from '../types';
 
-// Singleton Supabase client instance to avoid re-creating it.
 let supabaseClient: SupabaseClient | null = null;
-// Promise to ensure initialization only runs once.
+let isPlaceholderMode = false;
 let initializePromise: Promise<void> | null = null;
 
 /**
- * Initializes the singleton Supabase client.
- * This function now uses `process.env` to securely load credentials, which is
- * the standard method for this execution environment.
- *
- * @returns {Promise<void>} A promise that resolves when the client is initialized.
- * @throws {Error} If credentials cannot be obtained.
+ * A robust function to get an environment variable from multiple possible sources.
+ * It safely checks for Vite's `import.meta.env` and Node's `process.env`
+ * without causing a ReferenceError if one does not exist.
+ * @param {string} name - The name of the environment variable (e.g., 'VITE_SUPABASE_URL').
+ * @returns {string | undefined} The value of the variable, or undefined if not found.
  */
-const initializeSupabaseClient = (): Promise<void> => {
-    // If the promise already exists, return it to prevent re-initialization.
+const getEnvVariable = (name: string): string | undefined => {
+    // Safely check for Vite's `import.meta.env`
+    try {
+        // FIX: Cast `import.meta` to `any` to prevent TypeScript errors about the `env` property,
+        // which is added by Vite and not known to the standard TS types.
+        if (typeof import.meta !== 'undefined' && typeof (import.meta as any).env !== 'undefined' && (import.meta as any).env[name]) {
+            return (import.meta as any).env[name];
+        }
+    } catch (e) {
+        // Silently ignore if import.meta is not available
+    }
+
+    // Safely check for Node-style `process.env`
+    try {
+        if (typeof process !== 'undefined' && typeof process.env !== 'undefined' && process.env[name]) {
+            return process.env[name];
+        }
+    } catch (e) {
+        // Silently ignore if process is not available
+    }
+    
+    return undefined;
+};
+
+export const initializeSupabaseClient = (): Promise<void> => {
     if (initializePromise) {
         return initializePromise;
     }
 
-    // Create a new promise and store it. This ensures the initialization
-    // logic runs only once.
     initializePromise = new Promise((resolve, reject) => {
-        // If the client is already created, resolve immediately.
         if (supabaseClient) {
             return resolve();
         }
 
         try {
-            // FIX: The execution environment provides secrets on `process.env`.
-            // Switched from `window.aistudio.getSecrets` to `process.env`.
-            // The `(process as any)` cast is used to satisfy TypeScript in a browser-like environment.
-            const supabaseUrl = (process as any).env.VITE_SUPABASE_URL;
-            const supabaseAnonKey = (process as any).env.VITE_SUPABASE_ANON_KEY;
+            const supabaseUrl = getEnvVariable('VITE_SUPABASE_URL');
+            const supabaseAnonKey = getEnvVariable('VITE_SUPABASE_ANON_KEY');
 
-            if (!supabaseUrl || !supabaseAnonKey) {
-                throw new Error("[Configuration Error] Supabase URL/Key are missing. Please ensure they are configured in the environment.");
+            if (!supabaseUrl || !supabaseAnonKey || supabaseUrl.includes('placeholder')) {
+                isPlaceholderMode = true;
+                console.warn(
+                    "Supabase is not configured. Could not find environment variables (VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY) in any source. " +
+                    "Running in placeholder mode. Real data fetching is disabled."
+                );
+                supabaseClient = createClient('https://placeholder.supabase.co', 'placeholder.anon.key');
+            } else {
+                isPlaceholderMode = false;
+                supabaseClient = createClient(supabaseUrl, supabaseAnonKey);
             }
 
-            supabaseClient = createClient(supabaseUrl, supabaseAnonKey);
-            console.log("Supabase client initialized successfully.");
+            console.log(`Supabase client initialized. Placeholder mode: ${isPlaceholderMode}`);
             resolve();
         } catch (error) {
-            console.error("Supabase client initialization failed:", error.message);
-            // In case of failure, reset the promise to allow for future retries.
-            initializePromise = null;
-            reject(error);
+            console.error("Supabase client initialization crashed:", error);
+            isPlaceholderMode = true;
+            supabaseClient = createClient('https://placeholder.supabase.co', 'placeholder.anon.key');
+            reject(new Error(`Failed to initialize backend connection: ${error.message}`));
         }
     });
 
     return initializePromise;
 };
 
-
 /**
- * Returns the initialized singleton Supabase client, awaiting initialization if necessary.
- * @returns {Promise<SupabaseClient>} A promise resolving to the Supabase client instance.
- * @throws {Error} If the client fails to initialize.
+ * Checks if the application is configured with real Supabase credentials.
+ * @returns {boolean} True if the app is configured, false otherwise.
  */
-const getSupabaseClient = async (): Promise<SupabaseClient> => {
-    // This ensures that initialization is triggered if it hasn't been already.
-    // It will wait for the existing `initializePromise` to complete.
+export const isAppConfigured = (): boolean => !isPlaceholderMode;
+
+export const getSupabaseClient = async (): Promise<SupabaseClient> => {
     await initializeSupabaseClient();
     if (!supabaseClient) {
-        // This line should not be reachable if `initializeSupabaseClient` resolves,
-        // but it's a good safeguard.
-        throw new Error('Supabase client has not been initialized. Call initializeSupabaseClient and await its result first.');
+        throw new Error('Supabase client has not been initialized.');
     }
     return supabaseClient;
 };
 
-const mapPredictionToHistoryItem = (rawPrediction: RawPrediction): HistoryItem => {
+export const mapPredictionToHistoryItem = (rawPrediction: RawPrediction): HistoryItem => {
     const predictionData = rawPrediction.prediction_data || {};
-    return {
-        prediction: '', confidence: '', drawProbability: '', analysis: '',
-        keyStats: { teamA_form: '', teamB_form: '', head_to_head: '' },
+    
+    // Define a complete default structure. This is the source of truth for the object shape.
+    const defaults: PredictionResultData = {
+        prediction: 'Prediction not available',
+        confidence: 'N/A',
+        teamA_winProbability: '0%',
+        teamB_winProbability: '0%',
+        drawProbability: '0%',
+        analysis: 'Analysis not available.',
+        keyStats: { teamA_form: '?????', teamB_form: '?????', head_to_head: 'N/A' },
         bestBets: [],
-        ...(predictionData as PredictionResultData),
+        sources: [],
+        availabilityFactors: 'N/A',
+        venue: 'N/A',
+        kickoffTime: 'N/A',
+        referee: 'N/A',
+        teamA_logo: undefined,
+        teamB_logo: undefined,
+        leagueContext: { leagueName: null, teamA_position: null, teamB_position: null, isRivalry: false, isDerby: false, contextualAnalysis: null },
+        playerStats: [],
+        goalScorerPredictions: [],
+        goalProbabilities: { "0-1": '0%', "2-3": '0%', "4+": '0%' },
+        fromCache: false,
+    };
+
+    // Construct the final object property by property, avoiding the ambiguous `...predictionData` spread.
+    // This explicitly prevents any malformed data (e.g., a `null` for an object/array) from sneaking through.
+    const fullPredictionData: PredictionResultData = {
+        prediction: predictionData.prediction ?? defaults.prediction,
+        confidence: predictionData.confidence ?? defaults.confidence,
+        teamA_winProbability: predictionData.teamA_winProbability ?? defaults.teamA_winProbability,
+        teamB_winProbability: predictionData.teamB_winProbability ?? defaults.teamB_winProbability,
+        drawProbability: predictionData.drawProbability ?? defaults.drawProbability,
+        analysis: predictionData.analysis ?? defaults.analysis,
+        availabilityFactors: predictionData.availabilityFactors ?? defaults.availabilityFactors,
+        venue: predictionData.venue ?? defaults.venue,
+        kickoffTime: predictionData.kickoffTime ?? defaults.kickoffTime,
+        referee: predictionData.referee ?? defaults.referee,
+        teamA_logo: predictionData.teamA_logo ?? defaults.teamA_logo,
+        teamB_logo: predictionData.teamB_logo ?? defaults.teamB_logo,
+        fromCache: predictionData.fromCache ?? defaults.fromCache,
+
+        // For nested objects, safely merge them with defaults.
+        keyStats: { ...defaults.keyStats, ...(predictionData.keyStats || {}) },
+        leagueContext: { ...defaults.leagueContext, ...(predictionData.leagueContext || {}) },
+        goalProbabilities: { ...defaults.goalProbabilities, ...(predictionData.goalProbabilities || {}) },
+        
+        // For arrays, ensure they are never null, falling back to an empty array.
+        bestBets: predictionData.bestBets || defaults.bestBets,
+        sources: predictionData.sources || defaults.sources,
+        playerStats: predictionData.playerStats || defaults.playerStats,
+        goalScorerPredictions: predictionData.goalScorerPredictions || defaults.goalScorerPredictions,
+    };
+
+    return {
+        ...fullPredictionData,
         id: rawPrediction.id,
         teamA: rawPrediction.team_a,
         teamB: rawPrediction.team_b,
@@ -92,7 +160,10 @@ const mapPredictionToHistoryItem = (rawPrediction: RawPrediction): HistoryItem =
 };
 
 
-const getPredictionHistory = async (): Promise<HistoryItem[]> => {
+export const getPredictionHistory = async (): Promise<HistoryItem[]> => {
+    await initializeSupabaseClient();
+    if (isPlaceholderMode) return [];
+
     const supabase = await getSupabaseClient();
     const { data, error } = await supabase
         .from('predictions')
@@ -106,7 +177,10 @@ const getPredictionHistory = async (): Promise<HistoryItem[]> => {
     return (data || []).map(mapPredictionToHistoryItem);
 };
 
-const getAccuracyStats = async (): Promise<AccuracyStats> => {
+export const getAccuracyStats = async (): Promise<AccuracyStats> => {
+    await initializeSupabaseClient();
+    if (isPlaceholderMode) return { total: 0, wins: 0 };
+
     const supabase = await getSupabaseClient();
     const { data, error } = await supabase
         .from('predictions')
@@ -123,23 +197,21 @@ const getAccuracyStats = async (): Promise<AccuracyStats> => {
     };
 };
 
-const updatePredictionStatus = async (id: string, status: 'won' | 'lost'): Promise<void> => {
+export async function updatePredictionStatus(id: string, status: 'won' | 'lost'): Promise<void> {
+    await initializeSupabaseClient();
+    if (isPlaceholderMode) {
+        console.warn("Cannot update prediction status: App is in placeholder mode.");
+        return;
+    }
+    
     const supabase = await getSupabaseClient();
     const { error } = await supabase
         .from('predictions')
         .update({ status: status })
         .eq('id', id)
-        .eq('status', 'pending');
+        .in('status', ['pending', 'processing']); // Can only update pending or processing predictions
 
     if (error) {
         throw new Error(`[Database Error] Could not update the prediction status: ${error.message}`);
     }
-};
-
-export {
-    initializeSupabaseClient,
-    getSupabaseClient,
-    getPredictionHistory,
-    getAccuracyStats,
-    updatePredictionStatus,
-};
+}
