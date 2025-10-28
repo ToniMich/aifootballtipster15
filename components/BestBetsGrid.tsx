@@ -1,9 +1,9 @@
 import React from 'react';
-import { PredictionResultData, BestBet } from '../types';
+import { PredictionResultData, BestBet, HistoryItem } from '../types';
 import { LightningBoltIcon, FireIcon, FootballIcon, ChartPieIcon } from './icons';
 
 interface BestBetsGridProps {
-  result: PredictionResultData;
+  result: HistoryItem;
   teamA: string;
   teamB: string;
 }
@@ -67,8 +67,14 @@ const ProbabilityGlider: React.FC<{
 
 
 const BestBetsGrid: React.FC<BestBetsGridProps> = ({ result, teamA, teamB }) => {
-    const probA = parseInt(String(result.teamA_winProbability), 10) || 0;
-    const probB = parseInt(String(result.teamB_winProbability), 10) || 0;
+    // FIX: Determine if the result's team order is swapped compared to the user's input.
+    // This is necessary because the `result` object could be from a cache hit for "B vs A".
+    const teamsAreSwapped = result.teamA !== teamA;
+
+    // Use the `teamsAreSwapped` flag to select the correct probabilities for the Home (A) and Away (B) teams.
+    const probA = parseInt(String(teamsAreSwapped ? result.teamB_winProbability : result.teamA_winProbability), 10) || 0;
+    const probB = parseInt(String(teamsAreSwapped ? result.teamA_winProbability : result.teamB_winProbability), 10) || 0;
+
 
     // 1. Upset Probability
     const underdog = probA < probB ? teamA : teamB;

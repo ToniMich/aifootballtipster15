@@ -1,5 +1,5 @@
 import React from 'react';
-import { PredictionResultData, BestBet, PlayerStat, GoalScorerPrediction, TeamPerformanceStats, HistoryItem } from '../types';
+import { PredictionResultData, BestBet, PlayerStat, GoalScorerPrediction, TeamPerformanceStats, HistoryItem, HeadToHeadStats } from '../types';
 import { ChartPieIcon, WarningIcon, LocationMarkerIcon, CalendarIcon, WhistleIcon, FireIcon, LightningBoltIcon, TableCellsIcon, TrophyIcon, AssistIcon, CardIcon, TicketIcon } from './icons';
 import TeamLogo from './TeamLogo';
 import SocialShare from './SocialShare';
@@ -9,7 +9,7 @@ import BestBetsGrid from './BestBetsGrid';
 import HeadToHeadVisual from './HeadToHeadVisual';
 
 interface PredictionResultProps {
-  result: PredictionResultData | null;
+  result: HistoryItem | null;
   error: string | null;
   teamA: string;
   teamB: string;
@@ -209,9 +209,33 @@ const PredictionResult: React.FC<PredictionResultProps> = ({ result, error, team
         return null;
     }
     
-    const probA = parseInt(String(result.teamA_winProbability), 10) || 0;
-    const probB = parseInt(String(result.teamB_winProbability), 10) || 0;
+    // FIX: Determine if the result's team order is swapped compared to the user's input order.
+    // `teamA` and `teamB` props come from App.tsx state, representing the user's input (Home vs Away).
+    // `result.teamA` is the team name associated with teamA-specific data fields in the database record.
+    // This handles cases where a cached prediction for "B vs A" is used for a search of "A vs B".
+    const teamsAreSwapped = result.teamA !== teamA;
+
+    // Use the `teamsAreSwapped` flag to select the correct data for the Home (A) and Away (B) teams.
+    const probA = parseInt(String(teamsAreSwapped ? result.teamB_winProbability : result.teamA_winProbability), 10) || 0;
+    const probB = parseInt(String(teamsAreSwapped ? result.teamA_winProbability : result.teamB_winProbability), 10) || 0;
     const probDraw = parseInt(String(result.drawProbability), 10) || 0;
+
+    const logoA = teamsAreSwapped ? result.teamB_logo : result.teamA_logo;
+    const logoB = teamsAreSwapped ? result.teamA_logo : result.teamB_logo;
+
+    const formA = teamsAreSwapped ? result.keyStats.teamB_form : result.keyStats.teamA_form;
+    const formB = teamsAreSwapped ? result.keyStats.teamA_form : result.keyStats.teamB_form;
+
+    const h2hStats: HeadToHeadStats = teamsAreSwapped ? {
+        ...result.keyStats.head_to_head,
+        teamA_wins: result.keyStats.head_to_head.teamB_wins,
+        teamB_wins: result.keyStats.head_to_head.teamA_wins,
+    } : result.keyStats.head_to_head;
+    
+    const perfStats = teamPerformanceStats ? {
+        teamA: teamsAreSwapped ? teamPerformanceStats.teamB : teamPerformanceStats.teamA,
+        teamB: teamsAreSwapped ? teamPerformanceStats.teamA : teamPerformanceStats.teamB,
+    } : null;
 
     return (
         <div className="bg-white dark:bg-gray-800/50 backdrop-blur-sm border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg animate-fade-in overflow-hidden">
@@ -222,7 +246,7 @@ const PredictionResult: React.FC<PredictionResultProps> = ({ result, error, team
                     <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-4 text-center">
                         {/* Team A */}
                         <div className="flex flex-col items-center justify-start gap-3 min-w-0">
-                            <TeamLogo logoUrl={result.teamA_logo} teamName={String(teamA)} sizeClass="h-16 w-16" />
+                            <TeamLogo logoUrl={logoA} teamName={String(teamA)} sizeClass="h-16 w-16" />
                             <h3 className="text-xl font-bold text-gray-800 dark:text-gray-200 break-words">
                                 {renderSafely(teamA)}
                             </h3>
@@ -233,7 +257,7 @@ const PredictionResult: React.FC<PredictionResultProps> = ({ result, error, team
 
                         {/* Team B */}
                         <div className="flex flex-col items-center justify-start gap-3 min-w-0">
-                            <TeamLogo logoUrl={result.teamB_logo} teamName={String(teamB)} sizeClass="h-16 w-16" />
+                            <TeamLogo logoUrl={logoB} teamName={String(teamB)} sizeClass="h-16 w-16" />
                             <h3 className="text-xl font-bold text-gray-800 dark:text-gray-200 break-words">
                                 {renderSafely(teamB)}
                             </h3>
@@ -300,11 +324,11 @@ const PredictionResult: React.FC<PredictionResultProps> = ({ result, error, team
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <div className="p-4 bg-white dark:bg-gray-800 border dark:border-gray-700 rounded-lg">
                                 <h4 className="font-semibold mb-2">Recent Form</h4>
-                                <div className="flex justify-between items-center"><span>{renderSafely(teamA)}</span><TeamForm form={result.keyStats.teamA_form} /></div>
-                                <div className="flex justify-between items-center mt-2"><span>{renderSafely(teamB)}</span><TeamForm form={result.keyStats.teamB_form} /></div>
+                                <div className="flex justify-between items-center"><span>{renderSafely(teamA)}</span><TeamForm form={formA} /></div>
+                                <div className="flex justify-between items-center mt-2"><span>{renderSafely(teamB)}</span><TeamForm form={formB} /></div>
                             </div>
                              <div className="p-4 bg-white dark:bg-gray-800 border dark:border-gray-700 rounded-lg">
-                                 <HeadToHeadVisual stats={result.keyStats.head_to_head} teamAName={teamA} teamBName={teamB} />
+                                 <HeadToHeadVisual stats={h2hStats} teamAName={teamA} teamBName={teamB} />
                             </div>
                         </div>
                     </section>
@@ -319,14 +343,14 @@ const PredictionResult: React.FC<PredictionResultProps> = ({ result, error, team
                 </section>
 
                 {/* AI Team Performance */}
-                {teamPerformanceStats && (
+                {perfStats && (
                     <TeamPerformanceTracker 
                         teamA={teamA} 
                         teamB={teamB} 
-                        statsA={teamPerformanceStats.teamA} 
-                        statsB={teamPerformanceStats.teamB} 
-                        logoA={result.teamA_logo}
-                        logoB={result.teamB_logo}
+                        statsA={perfStats.teamA} 
+                        statsB={perfStats.teamB} 
+                        logoA={logoA}
+                        logoB={logoB}
                     />
                 )}
 
