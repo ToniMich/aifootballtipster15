@@ -252,25 +252,9 @@ const App: React.FC = () => {
             );
         }
 
-        if (appStatus === 'failed') {
-            return (
-                <div className="w-full max-w-2xl mx-auto p-4 sm:p-8 text-center bg-white dark:bg-gray-800/50 border border-red-300 dark:border-red-700 rounded-lg shadow-lg animate-fade-in-down">
-                    <WarningIcon className="h-12 w-12 mx-auto text-red-500" />
-                    <h2 className="mt-4 text-2xl font-bold text-gray-900 dark:text-white">Application Error</h2>
-                    <p className="mt-2 text-gray-600 dark:text-gray-400">
-                        The application failed to start correctly and cannot connect to its backend services. Some features will be disabled. This is usually due to a missing configuration.
-                    </p>
-                    {initError && (
-                        <div className="mt-4 text-left">
-                            <p className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1">Error Details:</p>
-                            <pre className="p-3 bg-gray-100 dark:bg-gray-900/50 rounded-md text-sm text-red-600 dark:text-red-400 overflow-x-auto">
-                                <code>{initError}</code>
-                            </pre>
-                        </div>
-                    )}
-                </div>
-            );
-        }
+        // The 'failed' status is no longer reachable on startup, so the error block is removed.
+        // The app now loads into 'ready' state, and connection errors are handled
+        // when a specific backend feature (like prediction) is used.
         
         return (
             <div className="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">

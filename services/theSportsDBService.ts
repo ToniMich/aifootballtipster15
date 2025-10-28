@@ -1,5 +1,6 @@
 import { LiveMatch } from '../types';
 import { getSupabaseClient, isAppConfigured } from './supabaseService';
+import { mockLiveScores } from '../data/liveScores';
 
 /**
  * Fetches live soccer scores from the secure backend Supabase Edge Function.
@@ -8,8 +9,8 @@ import { getSupabaseClient, isAppConfigured } from './supabaseService';
  */
 export async function fetchLiveScores(): Promise<LiveMatch[]> {
     if (!isAppConfigured()) {
-        console.warn("Live scores disabled: App is in placeholder mode.");
-        return [];
+        console.warn("Using mock live scores: App is in placeholder mode.");
+        return mockLiveScores;
     }
     
     try {

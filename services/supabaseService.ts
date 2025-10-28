@@ -43,34 +43,55 @@ export const initializeSupabaseClient = (): Promise<void> => {
         return initializePromise;
     }
 
-    initializePromise = new Promise((resolve, reject) => {
-        if (supabaseClient) {
-            return resolve();
-        }
-
+    initializePromise = new Promise((resolve) => {
         try {
-            const supabaseUrl = getEnvVariable('VITE_SUPABASE_URL');
-            const supabaseAnonKey = getEnvVariable('VITE_SUPABASE_ANON_KEY');
+            /**
+             * Checks if a given string is a valid HTTP/HTTPS URL.
+             * @param {string | undefined} url - The URL to validate.
+             * @returns {boolean} True if the URL is valid, false otherwise.
+             */
+            const isValidUrl = (url: string | undefined): boolean => {
+                if (!url) return false;
+                try {
+                    const newUrl = new URL(url);
+                    return newUrl.protocol === 'http:' || newUrl.protocol === 'https:';
+                } catch (e) {
+                    return false;
+                }
+            };
 
-            if (!supabaseUrl || !supabaseAnonKey || supabaseUrl.includes('placeholder')) {
+            const supabaseUrl = getEnvVariable('VITE_SUPABASE_URL') || getEnvVariable('SUPABASE_URL');
+            const supabaseAnonKey = getEnvVariable('VITE_SUPABASE_ANON_KEY') || getEnvVariable('SUPABASE_ANON_KEY');
+
+            if (!isValidUrl(supabaseUrl) || !supabaseAnonKey) {
                 isPlaceholderMode = true;
-                console.warn(
-                    "Supabase is not configured. Could not find environment variables (VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY) in any source. " +
-                    "Running in placeholder mode. Real data fetching is disabled."
-                );
-                supabaseClient = createClient('https://placeholder.supabase.co', 'placeholder.anon.key');
-            } else {
-                isPlaceholderMode = false;
-                supabaseClient = createClient(supabaseUrl, supabaseAnonKey);
-            }
+                const errorParts: string[] = [];
+                if (!supabaseUrl) {
+                    errorParts.push("SUPABASE_URL is missing.");
+                } else if (!isValidUrl(supabaseUrl)) {
+                    errorParts.push("SUPABASE_URL is not a valid HTTP/HTTPS URL.");
+                }
+                if (!supabaseAnonKey) {
+                    errorParts.push("SUPABASE_ANON_KEY is missing.");
+                }
 
-            console.log(`Supabase client initialized. Placeholder mode: ${isPlaceholderMode}`);
+                const detailedError = `Supabase configuration failed: ${errorParts.join(' ')} The application cannot connect to its backend and will run in placeholder mode.`;
+                console.warn(detailedError);
+                
+                // Instead of rejecting, we resolve. The app will enter placeholder mode gracefully.
+                resolve();
+                return; // Stop execution
+            } 
+            
+            isPlaceholderMode = false;
+            supabaseClient = createClient(supabaseUrl, supabaseAnonKey);
+            console.log(`Supabase client initialized successfully. Placeholder mode: ${isPlaceholderMode}`);
             resolve();
         } catch (error) {
             console.error("Supabase client initialization crashed:", error);
             isPlaceholderMode = true;
-            supabaseClient = createClient('https://placeholder.supabase.co', 'placeholder.anon.key');
-            reject(new Error(`Failed to initialize backend connection: ${error.message}`));
+            // Also resolve here to prevent the app from crashing with an unhandled rejection.
+            resolve();
         }
     });
 
@@ -86,7 +107,10 @@ export const isAppConfigured = (): boolean => !isPlaceholderMode;
 export const getSupabaseClient = async (): Promise<SupabaseClient> => {
     await initializeSupabaseClient();
     if (!supabaseClient) {
-        throw new Error('Supabase client has not been initialized.');
+        // This will be true if we are in placeholder mode or if initialization failed
+        // in an unexpected way. The calling functions are responsible for checking
+        // isAppConfigured() first, so this acts as a failsafe.
+        throw new Error('Supabase client is not available. Ensure the app is configured and not in placeholder mode.');
     }
     return supabaseClient;
 };
@@ -161,8 +185,7 @@ export const mapPredictionToHistoryItem = (rawPrediction: RawPrediction): Histor
 
 
 export const getPredictionHistory = async (): Promise<HistoryItem[]> => {
-    await initializeSupabaseClient();
-    if (isPlaceholderMode) return [];
+    if (!isAppConfigured()) return [];
 
     const supabase = await getSupabaseClient();
     const { data, error } = await supabase
@@ -178,8 +201,7 @@ export const getPredictionHistory = async (): Promise<HistoryItem[]> => {
 };
 
 export const getAccuracyStats = async (): Promise<AccuracyStats> => {
-    await initializeSupabaseClient();
-    if (isPlaceholderMode) return { total: 0, wins: 0 };
+    if (!isAppConfigured()) return { total: 0, wins: 0 };
 
     const supabase = await getSupabaseClient();
     const { data, error } = await supabase
@@ -198,8 +220,7 @@ export const getAccuracyStats = async (): Promise<AccuracyStats> => {
 };
 
 export async function updatePredictionStatus(id: string, status: 'won' | 'lost'): Promise<void> {
-    await initializeSupabaseClient();
-    if (isPlaceholderMode) {
+    if (!isAppConfigured()) {
         console.warn("Cannot update prediction status: App is in placeholder mode.");
         return;
     }
