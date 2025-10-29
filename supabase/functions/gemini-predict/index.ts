@@ -171,7 +171,11 @@ Deno.serve(async (req: Request) => {
 5.  **Analyze Absences:** The impact of player absences MUST be discussed in the 'analysis' and 'availabilityFactors' sections, explaining how it affects team strategy.
 6.  **Ensure Data Consistency:** The sum of win/draw probabilities must equal 100%. The sum of BTTS probabilities must equal 100%. The sum of Over/Under 2.5 probabilities must equal 100%.
 
-Your response MUST be a single, valid JSON object that strictly adheres to the requested schema. Do not include any text, markdown formatting (like \`\`\`json\`), or any other content outside of the JSON object itself.`;
+Your response MUST be a single, valid JSON object that strictly adheres to the following JSON schema. Do not include any text, markdown formatting (like \`\`\`json\`), or any other content outside of the JSON object itself.
+
+**JSON Schema:**
+${JSON.stringify(predictionSchema, null, 2)}
+`;
 
         const response = await ai.models.generateContent({
             model: "gemini-2.5-flash",

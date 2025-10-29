@@ -177,14 +177,19 @@ const PredictionResult: React.FC<PredictionResultProps> = ({ result, error, team
     const logoA = teamsAreSwapped ? result.teamB_logo : result.teamA_logo;
     const logoB = teamsAreSwapped ? result.teamA_logo : result.teamB_logo;
 
-    const formA = teamsAreSwapped ? result.keyStats.teamB_form : result.keyStats.teamA_form;
-    const formB = teamsAreSwapped ? result.keyStats.teamA_form : result.keyStats.teamB_form;
+    // FIX: Defensively access `keyStats` and `head_to_head` by providing default fallback objects.
+    // This prevents runtime errors if the prediction result is missing these properties (e.g., from a partial Gemini response).
+    const keyStats = result.keyStats || { teamA_form: '?????', teamB_form: '?????', head_to_head: { totalMatches: 0, teamA_wins: 0, draws: 0, teamB_wins: 0, summary: 'N/A' } };
+    const h2hData = keyStats.head_to_head || { totalMatches: 0, teamA_wins: 0, draws: 0, teamB_wins: 0, summary: 'N/A' };
+    
+    const formA = teamsAreSwapped ? keyStats.teamB_form : keyStats.teamA_form;
+    const formB = teamsAreSwapped ? keyStats.teamA_form : keyStats.teamB_form;
 
     const h2hStats: HeadToHeadStats = teamsAreSwapped ? {
-        ...result.keyStats.head_to_head,
-        teamA_wins: result.keyStats.head_to_head.teamB_wins,
-        teamB_wins: result.keyStats.head_to_head.teamA_wins,
-    } : result.keyStats.head_to_head;
+        ...h2hData,
+        teamA_wins: h2hData.teamB_wins,
+        teamB_wins: h2hData.teamA_wins,
+    } : h2hData;
     
     return (
         <div className="bg-white dark:bg-gray-800/50 backdrop-blur-sm border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg animate-fade-in overflow-hidden">

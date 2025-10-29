@@ -1,9 +1,7 @@
 import { GoogleGenAI, Type } from '@google/genai';
-import { HistoryItem, RawPrediction, PredictionResultData } from '../types';
-import { getSupabaseClient, isAppConfigured } from './supabaseService';
+import { HistoryItem, PredictionResultData } from '../types';
 
 // Schema for Gemini, ensuring a structured JSON response.
-// This is replicated from the backend function for the fallback mechanism.
 const predictionSchema = {
     type: Type.OBJECT,
     properties: {
@@ -85,37 +83,8 @@ const predictionSchema = {
     required: ['prediction', 'confidence', 'teamA_winProbability', 'teamB_winProbability', 'drawProbability', 'analysis', 'keyStats', 'bestBets', 'availabilityFactors', 'venue', 'kickoffTime', 'referee', 'leagueContext', 'playerStats', 'goalScorerPredictions', 'goalProbabilities', 'bttsPrediction', 'overUnderPrediction']
 };
 
-
 /**
- * Starts the prediction process by calling the secure Supabase Edge Function.
- * This function initiates a background job for AI analysis if a cached result isn't available.
- *
- * @param {string} teamA - The name of the first team.
- * @param {'men' | 'women'} matchCategory - The category of the match.
- * @param {string} teamB - The name of the second team.
- * @returns {Promise<{ isCached: boolean; data: any }>} A promise that resolves to either the cached prediction data or a job ID for polling.
- */
-export async function startPredictionJob(teamA: string, teamB: string, matchCategory: 'men' | 'women'): Promise<{ isCached: boolean; data: any }> {
-    if (!isAppConfigured()) {
-        // If the backend isn't configured, we throw an error. This signals the App
-        // component to attempt the direct-to-Gemini fallback.
-        throw new Error("Application backend is not configured.");
-    }
-
-    const supabase = await getSupabaseClient();
-    const { data, error } = await supabase.functions.invoke('request-prediction', {
-        body: { teamA, teamB, matchCategory },
-    });
-
-    if (error) {
-        throw new Error(`[Network Error] Failed to invoke 'request-prediction' function: ${error.message}`);
-    }
-    return data;
-}
-
-/**
- * A fallback function to get a prediction directly from the Gemini API.
- * This is used only when the primary backend (Supabase function) fails.
+ * Gets a prediction directly from the Gemini API from the frontend.
  *
  * @param {string} teamA - The name of the first team.
  * @param {string} teamB - The name of the second team.
@@ -126,7 +95,7 @@ export async function getPredictionDirectlyFromGemini(teamA: string, teamB: stri
     const apiKey = process.env.API_KEY;
 
     if (!apiKey) {
-        throw new Error("Cannot connect to AI service. API Key is not configured for direct fallback access on the frontend.");
+        throw new Error("Cannot connect to AI service. API Key is not configured for direct frontend access.");
     }
 
     const ai = new GoogleGenAI({ apiKey });
@@ -141,7 +110,11 @@ export async function getPredictionDirectlyFromGemini(teamA: string, teamB: stri
 5.  **Analyze Absences:** The impact of player absences MUST be discussed in the 'analysis' and 'availabilityFactors' sections, explaining how it affects team strategy.
 6.  **Ensure Data Consistency:** The sum of win/draw probabilities must equal 100%. The sum of BTTS probabilities must equal 100%. The sum of Over/Under 2.5 probabilities must equal 100%.
 
-Your response MUST be a single, valid JSON object that strictly adheres to the requested schema. Do not include any text, markdown formatting (like \`\`\`json\`), or any other content outside of the JSON object itself.`;
+Your response MUST be a single, valid JSON object that strictly adheres to the following JSON schema. Do not include any text, markdown formatting (like \`\`\`json\`), or any other content outside of the JSON object itself.
+
+**JSON Schema:**
+${JSON.stringify(predictionSchema, null, 2)}
+`;
 
     const response = await ai.models.generateContent({
         model: "gemini-2.5-flash",
@@ -187,37 +160,4 @@ Your response MUST be a single, valid JSON object that strictly adheres to the r
     };
 
     return historyItem;
-}
-
-
-/**
- * Polls the backend to get the result of a prediction job.
- * @param {string} jobId The ID of the prediction job to check.
- * @returns {Promise<HistoryItem>} A promise that resolves to the full prediction data once the job is complete.
- */
-export async function getPredictionResult(jobId: string): Promise<any> {
-    if (!isAppConfigured()) {
-        // This path should ideally not be hit if the fallback works, but serves as a safeguard.
-        throw new Error("Prediction feature is disabled. The application has not been configured with a backend service.");
-    }
-    const supabase = await getSupabaseClient();
-    const { data, error } = await supabase.functions.invoke('get-prediction', {
-        body: { jobId },
-    });
-
-    if (error) {
-        throw new Error(`[Network Error] Failed to invoke 'get-prediction' function: ${error.message}`);
-    }
-    return data;
-}
-
-
-/**
- * The Gemini client is no longer initialized on the frontend.
- * This function is kept for compatibility but will always return undefined.
- * All Gemini calls are now handled by the secure backend function.
- * @returns {undefined}
- */
-export function getInitializationError(): Error | undefined {
-    return undefined;
 }
