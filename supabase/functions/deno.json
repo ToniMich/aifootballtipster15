@@ -1,6 +1,6 @@
 {
   "imports": {
-    "shared/": "./shared/",
+    "shared/": "./_shared/",
     "@supabase/supabase-js": "npm:@supabase/supabase-js@2.44.4",
     "@google/genai": "npm:@google/genai@1.24.0"
   }

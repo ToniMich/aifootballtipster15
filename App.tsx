@@ -1,7 +1,7 @@
 import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { startPredictionJob, getPredictionResult, getPredictionDirectlyFromGemini } from './services/geminiService';
 import { HistoryItem } from './types';
-import { initializeSupabaseClient, getAccuracyStats, mapPredictionToHistoryItem } from './services/supabaseService';
+import { initializeSupabaseClient, isAppConfigured, mapPredictionToHistoryItem } from './services/supabaseService';
 import { getTheme, setTheme as saveTheme } from './services/localStorageService';
 import Loader from './components/Loader';
 import PredictionResult from './components/PredictionResult';
@@ -10,14 +10,7 @@ import TeamInput from './components/TeamInput';
 import DonationBlock from './components/DonationBlock';
 import CategoryToggle from './components/CategoryToggle';
 import Footer from './components/Footer';
-import HeaderAccuracyTracker from './components/HeaderAccuracyTracker';
 import LiveScores from './components/LiveScores';
-import ApiKeyInstructions from './components/ApiKeyInstructions';
-
-interface AccuracyStats {
-    total: number;
-    wins: number;
-}
 
 const App: React.FC = () => {
     const [teamA, setTeamA] = useState<string>('');
@@ -27,41 +20,23 @@ const App: React.FC = () => {
     const [error, setError] = useState<string | null>(null);
     const [appStatus, setAppStatus] = useState<'initializing' | 'ready' | 'failed'>('initializing');
     const [initError, setInitError] = useState<string | null>(null);
-    const [accuracyStats, setAccuracyStats] = useState<AccuracyStats>({ total: 0, wins: 0 });
     const [theme, setTheme] = useState<'light' | 'dark'>(getTheme());
     const [matchCategory, setMatchCategory] = useState<'men' | 'women'>('men');
-
-    // Ref to hold the polling interval ID and polling timeout ID
     const pollingIntervalRef = useRef<number | null>(null);
-    const pollingTimeoutRef = useRef<number | null>(null);
 
-    const clearPolling = useCallback(() => {
-        if (pollingIntervalRef.current) {
-            clearInterval(pollingIntervalRef.current);
-            pollingIntervalRef.current = null;
-        }
-        if (pollingTimeoutRef.current) {
-            clearTimeout(pollingTimeoutRef.current);
-            pollingTimeoutRef.current = null;
-        }
-    }, []);
-
-    const refreshData = useCallback(async () => {
-        try {
-            const fetchedStats = await getAccuracyStats();
-            setAccuracyStats(fetchedStats);
-        } catch (err) {
-            // Re-throw to be handled by the caller
-            throw err;
-        }
-    }, []);
-    
     useEffect(() => {
         const initializeApp = async () => {
             try {
+                // Initialize Supabase. This is still needed for the Live Scores feature.
                 await initializeSupabaseClient();
-                await refreshData();
-                setAppStatus('ready');
+                
+                if (isAppConfigured()) {
+                    setAppStatus('ready');
+                } else {
+                    // If not configured, set a non-blocking notice for features that need it.
+                    setInitError("Application backend is not configured. Live scores will be unavailable.");
+                    setAppStatus('failed');
+                }
             } catch (err) {
                 const errorMessage = err instanceof Error ? err.message : 'An unknown error occurred during initialization.';
                 console.error("Application initialization failed:", errorMessage);
@@ -71,10 +46,7 @@ const App: React.FC = () => {
         };
 
         initializeApp();
-
-        // Cleanup polling on component unmount
-        return () => clearPolling();
-    }, [refreshData, clearPolling]);
+    }, []);
 
     useEffect(() => {
         if (theme === 'dark') {
@@ -90,7 +62,10 @@ const App: React.FC = () => {
     };
     
     const handleStopOrReset = () => {
-        clearPolling();
+        if (pollingIntervalRef.current) {
+            clearInterval(pollingIntervalRef.current);
+            pollingIntervalRef.current = null;
+        }
         setIsLoading(false);
         setError(null);
         setPredictionResult(null);
@@ -98,11 +73,58 @@ const App: React.FC = () => {
         setTeamB('');
     };
 
+    const pollForPrediction = (jobId: string) => {
+        const pollInterval = 3000; // 3 seconds
+        const maxAttempts = 20;   // 20 attempts * 3s = 60s timeout
+        let attempt = 0;
+    
+        const poll = window.setInterval(async () => {
+            if (attempt >= maxAttempts) {
+                clearInterval(poll);
+                pollingIntervalRef.current = null;
+                setError("The prediction is taking longer than expected. The AI might be busy. Please try again in a moment.");
+                setIsLoading(false);
+                return;
+            }
+    
+            try {
+                const result = await getPredictionResult(jobId);
+                
+                if (result && result.status !== 'processing') {
+                    clearInterval(poll);
+                    pollingIntervalRef.current = null;
+                    
+                    if (result.status === 'failed') {
+                        const errorMessage = result.prediction_data?.error || "The AI failed to generate a prediction for this match.";
+                        setError(errorMessage);
+                    } else {
+                        const historyItem = mapPredictionToHistoryItem(result);
+                        setPredictionResult(historyItem);
+                    }
+                    setIsLoading(false);
+                }
+            } catch (err) {
+                clearInterval(poll);
+                pollingIntervalRef.current = null;
+                const errorMessage = err instanceof Error ? err.message : "An error occurred while fetching the result.";
+                setError(errorMessage);
+                setIsLoading(false);
+            }
+    
+            attempt++;
+        }, pollInterval);
+    
+        pollingIntervalRef.current = poll;
+    };
+
     const handlePredict = useCallback(async () => {
+        if (pollingIntervalRef.current) {
+            clearInterval(pollingIntervalRef.current);
+            pollingIntervalRef.current = null;
+        }
         setIsLoading(true);
         setError(null);
         setPredictionResult(null);
-        clearPolling();
     
         const trimmedA = teamA.trim();
         const trimmedB = teamB.trim();
@@ -114,80 +136,48 @@ const App: React.FC = () => {
             if (trimmedA.length < 2 || trimmedA.length > 50 || trimmedB.length < 2 || trimmedB.length > 50) { throw new Error('Team names must be between 2 and 50 characters long.'); }
             if (!validTeamNameRegex.test(trimmedA) || !validTeamNameRegex.test(trimmedB)) { throw new Error("Team names can only include letters, numbers, spaces, and .'-&()"); }
             if (trimmedA.toLowerCase() === trimmedB.toLowerCase()) { throw new Error('Please enter two different team names.'); }
-            
-            console.log(`[AIFootballTipster] Starting prediction for: ${trimmedA} vs ${trimmedB}`);
-            
-            // --- PRIMARY PATH: Use the backend ---
-            const { isCached, data } = await startPredictionJob(trimmedA, trimmedB, matchCategory);
 
-            if (isCached) {
-                console.log("[AIFootballTipster] Cache hit. Displaying result.");
-                setPredictionResult(mapPredictionToHistoryItem(data));
+            // --- PRIMARY PATH: Use backend job ---
+            console.log(`[AIFootballTipster] Requesting prediction for: ${trimmedA} vs ${trimmedB}`);
+            const response = await startPredictionJob(trimmedA, trimmedB, matchCategory);
+
+            if (response.isCached) {
+                console.log("[AIFootballTipster] Prediction found in cache.");
+                const historyItem = mapPredictionToHistoryItem(response.data);
+                setPredictionResult(historyItem);
                 setIsLoading(false);
-                try {
-                    await refreshData();
-                } catch (refreshError) {
-                    console.warn("Failed to refresh history after cache hit, but showing result anyway:", refreshError);
-                }
             } else {
-                console.log(`[AIFootballTipster] Background job started with ID: ${data.jobId}. Starting to poll.`);
-                // --- Polling Logic ---
-                const jobId = data.jobId;
-
-                const poll = async () => {
-                    try {
-                        const result = await getPredictionResult(jobId);
-                        if (result && result.status && result.status !== 'processing') {
-                            clearPolling();
-                            if (result.status === 'failed') {
-                                const errorMsg = result.prediction_data?.error || "The AI failed to generate a prediction. Please try again.";
-                                throw new Error(errorMsg);
-                            }
-                            console.log("[AIFootballTipster] Polling successful. Displaying result.");
-                            setPredictionResult(mapPredictionToHistoryItem(result));
-                            setIsLoading(false); 
-                            try {
-                                await refreshData();
-                            } catch (refreshError) {
-                                console.warn("Failed to refresh history after prediction, but showing result anyway:", refreshError);
-                            }
-                        }
-                    } catch (pollError) {
-                         clearPolling();
-                         setError(pollError.message);
-                         setIsLoading(false);
-                    }
-                };
-                
-                poll(); 
-                pollingIntervalRef.current = window.setInterval(poll, 3000);
-
-                pollingTimeoutRef.current = window.setTimeout(() => {
-                    if (pollingIntervalRef.current) {
-                        clearPolling();
-                        setError("The request timed out. The server might be busy. Please try again later.");
-                        setIsLoading(false);
-                    }
-                }, 90000); 
+                console.log(`[AIFootballTipster] Prediction job started with ID: ${response.data.jobId}`);
+                pollForPrediction(response.data.jobId);
             }
-        } catch (backendError) {
-            // This block now catches errors from validation or the backend `startPredictionJob` call.
-            console.warn(`[AIFootballTipster] Backend path failed: ${backendError.message}. Attempting direct Gemini fallback.`);
+        } catch (err) {
+            const initialError = err instanceof Error ? err.message : "An unknown error occurred.";
+            
+            // Check if it's a validation error. If so, display it and stop.
+            const isValidationError = ['Please enter names', 'must be between', 'can only include', 'different team names'].some(phrase => initialError.includes(phrase));
 
-            // --- FALLBACK PATH: Use direct Gemini call ---
+            if (isValidationError) {
+                setError(initialError);
+                setIsLoading(false);
+                return;
+            }
+
+            // If not a validation error, assume it's a backend issue and try the fallback.
+            console.warn(`[AIFootballTipster] Backend prediction failed or is unavailable, falling back to direct Gemini call. Reason: ${initialError}`);
+            
             try {
+                console.log(`[AIFootballTipster] Starting direct prediction for: ${trimmedA} vs ${trimmedB}`);
                 const directResult = await getPredictionDirectlyFromGemini(trimmedA, trimmedB, matchCategory);
                 setPredictionResult(directResult);
                 setIsLoading(false);
-            } catch (geminiError) {
-                // This catches errors from the fallback itself.
-                console.error(`[AIFootballTipster] Direct Gemini fallback also failed: ${geminiError.message}`);
-                clearPolling();
-                setError(`The backend is unavailable, and the direct AI fallback also failed. Details: ${geminiError.message}`);
+            } catch (geminiErr) {
+                const errorMessage = geminiErr instanceof Error ? geminiErr.message : "An unknown error occurred during AI analysis.";
+                console.error(`[AIFootballTipster] Direct Gemini prediction failed: ${errorMessage}`);
+                setError(errorMessage);
                 setIsLoading(false);
             }
         }
-    }, [teamA, teamB, matchCategory, refreshData, clearPolling]);
+    }, [teamA, teamB, matchCategory]);
     
     const renderAppContent = () => {
         if (appStatus === 'initializing') {
@@ -201,14 +191,8 @@ const App: React.FC = () => {
         return (
             <div className="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
                 <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
-                    {/* Left column: Predictor and History */}
+                    {/* Left column: Predictor */}
                     <div className="space-y-8 lg:col-span-3">
-                         {initError && (
-                             <div className="p-4 bg-yellow-50 dark:bg-yellow-900/40 border border-yellow-400 dark:border-yellow-500/50 rounded-lg text-yellow-800 dark:text-yellow-200">
-                                <p className="font-semibold">Backend Notice:</p>
-                                <p className="text-sm">{initError}</p>
-                            </div>
-                        )}
                         <div className="bg-white dark:bg-gray-800/50 backdrop-blur-sm border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg p-6 sm:p-8 animate-fade-in-down">
                             <h2 className="text-center text-3xl font-bold text-gray-900 dark:text-white mb-6">
                                 The Predictor
@@ -289,7 +273,7 @@ const App: React.FC = () => {
                     {/* Right column: Live Scores and Sidebar */}
                     <div className="space-y-8 lg:col-span-1">
                         <div className="lg:sticky lg:top-28 space-y-8">
-                            <LiveScores />
+                            <LiveScores disabled={appStatus !== 'ready'} />
                             <DonationBlock />
                         </div>
                     </div>
@@ -310,8 +294,6 @@ const App: React.FC = () => {
                             </h1>
                         </div>
                         <div className="flex items-center gap-2 sm:gap-4">
-                            <HeaderAccuracyTracker total={accuracyStats.total} wins={accuracyStats.wins} />
-                            <div className="h-6 w-px bg-gray-200 dark:bg-gray-600 hidden sm:block"></div>
                             <button
                                 onClick={toggleTheme}
                                 className="p-2 rounded-full text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-green-500"

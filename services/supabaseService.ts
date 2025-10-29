@@ -209,7 +209,12 @@ export const getPredictionHistory = async (): Promise<HistoryItem[]> => {
 };
 
 export const getAccuracyStats = async (): Promise<AccuracyStats> => {
-    if (!isAppConfigured()) return { total: 0, wins: 0 };
+    if (!isAppConfigured()) {
+        // This throw is critical for the app's initialization logic.
+        // It ensures that if the backend is not configured, the app enters a
+        // 'failed' state instead of incorrectly becoming 'ready'.
+        throw new Error("Application backend is not configured, cannot fetch stats.");
+    }
 
     const supabase = await getSupabaseClient();
     const { data, error } = await supabase
@@ -227,7 +232,7 @@ export const getAccuracyStats = async (): Promise<AccuracyStats> => {
     };
 };
 
-export async function updatePredictionStatus(id: string, status: 'won' | 'lost'): Promise<void> {
+export const updatePredictionStatus = async (id: string, status: 'won' | 'lost'): Promise<void> => {
     if (!isAppConfigured()) {
         console.warn("Cannot update prediction status: App is in placeholder mode.");
         return;
@@ -243,4 +248,4 @@ export async function updatePredictionStatus(id: string, status: 'won' | 'lost')
     if (error) {
         throw new Error(`[Database Error] Could not update the prediction status: ${error.message}`);
     }
-}
+};

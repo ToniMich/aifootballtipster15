@@ -1,8 +1,8 @@
 // supabase/functions/get-prediction/index.ts
 
 // FIX: Corrected import paths for shared utilities.
-import { corsHeaders } from '../_shared/cors.ts'
-import { supabaseAdminClient as supabase } from '../_shared/init.ts'
+import { corsHeaders } from 'shared/cors.ts'
+import { supabaseAdminClient as supabase } from 'shared/init.ts'
 
 declare const Deno: any;
 

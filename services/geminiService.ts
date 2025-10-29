@@ -134,11 +134,11 @@ export async function getPredictionDirectlyFromGemini(teamA: string, teamB: stri
     const prompt = `You are a world-class football analyst. Your primary task is to provide a detailed, data-driven analysis for the upcoming ${matchCategory}'s soccer match between ${teamA} and ${teamB}.
 
 **CRITICAL INSTRUCTIONS:**
-1.  **Up-to-the-Minute Data:** Your analysis MUST reflect the absolute latest team and player information.
-2.  **Verify Player Transfers:** You MUST verify player team affiliations against the most recent transfer data. Stating that a player belongs to a former club (e.g., claiming Kylian Mbappé plays for PSG after his transfer to Real Madrid) is a critical error.
-3.  **Check Player Availability:** You MUST use your most recent internal knowledge to verify player availability. This includes checking for confirmed injuries, suspensions, players on loan, and starters who are doubtful to play.
-4.  **Exclude Unavailable Players:** Players confirmed to be unavailable for the match (e.g., Cole Palmer injured, Nicolas Jackson on loan) MUST NOT be included in the 'playerStats' or 'goalScorerPredictions' lists.
-5.  **Analyze Absences:** The impact of these player absences MUST be discussed in the 'analysis' and 'availabilityFactors' sections, explaining how it affects the team's strategy and the match outcome.
+1.  **Use Google Search:** You MUST use Google Search to find the absolute latest team news, match schedules, player statuses, and statistics. Do not rely on old, internal knowledge.
+2.  **Current Context:** The current year is ${new Date().getFullYear()}. All analysis, including match dates and league seasons, must be for the present or near future. Do not use data from previous years unless for historical context.
+3.  **Verify Player Transfers & Availability:** Search for the most recent transfer data and player availability. Check for confirmed injuries and suspensions. **Exercise extreme caution with sensitive player status information; double-check all sources before reporting.**
+4.  **Exclude Unavailable Players:** Players confirmed to be unavailable for the match MUST NOT be included in the 'playerStats' or 'goalScorerPredictions' lists.
+5.  **Analyze Absences:** The impact of player absences MUST be discussed in the 'analysis' and 'availabilityFactors' sections, explaining how it affects team strategy.
 6.  **Ensure Data Consistency:** The sum of win/draw probabilities must equal 100%. The sum of BTTS probabilities must equal 100%. The sum of Over/Under 2.5 probabilities must equal 100%.
 
 Your response MUST be a single, valid JSON object that strictly adheres to the requested schema. Do not include any text, markdown formatting (like \`\`\`json\`), or any other content outside of the JSON object itself.`;
@@ -147,8 +147,7 @@ Your response MUST be a single, valid JSON object that strictly adheres to the r
         model: "gemini-2.5-flash",
         contents: prompt,
         config: {
-            responseMimeType: "application/json",
-            responseSchema: predictionSchema,
+            tools: [{googleSearch: {}}],
         },
     });
     
@@ -164,14 +163,15 @@ Your response MUST be a single, valid JSON object that strictly adheres to the r
     let predictionData: PredictionResultData;
     
     try {
-        predictionData = JSON.parse(predictionText);
+        const cleanedText = predictionText.replace(/^```json\s*|```$/g, '').trim();
+        predictionData = JSON.parse(cleanedText);
     } catch (e) {
         console.error("All JSON parsing attempts failed. Final response text:", predictionText);
         throw new Error("[Invalid Response] The AI returned a response that could not be parsed as JSON, even after being forced.");
     }
 
-    // Since we are not using Google Search, there will be no sources.
-    predictionData.sources = [];
+    // Add sources from grounding
+    predictionData.sources = response.candidates?.[0]?.groundingMetadata?.groundingChunks || [];
     predictionData.fromCache = false;
 
     // Manually construct a HistoryItem, as this result is not coming from the database.
