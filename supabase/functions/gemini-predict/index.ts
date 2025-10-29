@@ -3,7 +3,6 @@
 // FIX: Corrected import paths for shared utilities.
 import { supabaseAdminClient as supabase } from '../_shared/init.ts'
 import { GoogleGenAI, Type } from 'npm:@google/genai@1.24.0';
-import { corsHeaders } from "../_shared/cors.ts";
 
 // Fix for "Cannot find name 'Deno'" error in Supabase Edge Functions.
 declare const Deno: any;
@@ -90,9 +89,43 @@ const predictionSchema = {
     required: ['prediction', 'confidence', 'teamA_winProbability', 'teamB_winProbability', 'drawProbability', 'analysis', 'keyStats', 'bestBets', 'availabilityFactors', 'venue', 'kickoffTime', 'referee', 'leagueContext', 'playerStats', 'goalScorerPredictions', 'goalProbabilities', 'bttsPrediction', 'overUnderPrediction']
 };
 
+const cleanLogoUrl = (url: string | null | undefined): string | undefined => {
+    if (typeof url === 'string' && url.endsWith('/preview')) {
+        return url.slice(0, -8); // Removes '/preview'
+    }
+    return url || undefined;
+};
+
+interface TeamDetails {
+    idTeam: string;
+    strTeam: string;
+    strTeamBadge: string;
+}
+
+const fetchTeamLogo = async (teamName: string, apiKey: string): Promise<string | undefined> => {
+    if (!teamName) return undefined;
+    try {
+        const url = `https://www.thesportsdb.com/api/v1/json/${apiKey}/searchteams.php?t=${encodeURIComponent(teamName)}`;
+        const response = await fetch(url);
+        if (!response.ok) {
+            console.warn(`Failed to fetch logo for ${teamName}. Status: ${response.status}`);
+            return undefined;
+        }
+        const data = await response.json() as { teams?: TeamDetails[] };
+        if (data.teams && data.teams.length > 0) {
+            const exactMatch = data.teams.find(t => t.strTeam.toLowerCase() === teamName.toLowerCase());
+            const team = exactMatch || data.teams[0];
+            return cleanLogoUrl(team.strTeamBadge);
+        }
+    } catch (error) {
+        console.error(`Error fetching logo for ${teamName}:`, error.message);
+    }
+    return undefined;
+};
+
 Deno.serve(async (req: Request) => {
-    // This is a background function and does not need to handle OPTIONS preflight requests.
-    const apiKey = Deno.env.get('API_KEY');
+    const geminiApiKey = Deno.env.get('API_KEY');
+    const sportsDbApiKey = Deno.env.get('THESPORTSDB_API_KEY');
     
     let jobId: string | null = null;
     let body;
@@ -101,8 +134,6 @@ Deno.serve(async (req: Request) => {
         jobId = body.jobId;
     } catch (e) {
         console.error("Gemini-predict function called with invalid body:", e.message);
-        // This function is invoked by another function, so we return an error response
-        // which can be caught by the caller if it's awaiting the result.
         return new Response(JSON.stringify({ error: "Invalid request body" }), { status: 400 });
     }
 
@@ -120,15 +151,15 @@ Deno.serve(async (req: Request) => {
         }
     };
 
-    if (!apiKey) {
-        const errorMsg = '[Configuration Error] Server configuration is incomplete. Ensure API_KEY are set.';
+    if (!geminiApiKey || !sportsDbApiKey) {
+        const errorMsg = '[Configuration Error] Server configuration is incomplete. Ensure API_KEY and THESPORTSDB_API_KEY are set.';
         await failJob(errorMsg);
         return new Response(JSON.stringify({ error: "Server configuration error" }), { status: 500 });
     }
 
     try {
         const { teamA, teamB, matchCategory } = body;
-        const ai = new GoogleGenAI({ apiKey: apiKey });
+        const ai = new GoogleGenAI({ apiKey: geminiApiKey });
 
         const prompt = `You are a world-class football analyst. Your primary task is to provide a detailed, data-driven analysis for the upcoming ${matchCategory}'s soccer match between ${teamA} and ${teamB}.
 
@@ -161,8 +192,14 @@ Your response MUST be a single, valid JSON object that strictly adheres to the r
         }
 
         let predictionData = JSON.parse(predictionText);
-        // Grounding chunks are not available without the search tool, so sources will be empty.
-        predictionData.sources = response.candidates?.[0]?.groundingMetadata?.groundingChunks?.map((chunk: any) => chunk.web).filter((web: any) => web && web.uri && web.title) || [];
+        
+        const [teamA_logo, teamB_logo] = await Promise.all([
+            fetchTeamLogo(teamA, sportsDbApiKey),
+            fetchTeamLogo(teamB, sportsDbApiKey)
+        ]);
+        
+        predictionData.teamA_logo = teamA_logo;
+        predictionData.teamB_logo = teamB_logo;
 
         const { error: updateError } = await supabase
             .from('predictions')

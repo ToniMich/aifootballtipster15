@@ -1,22 +1,18 @@
 import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { startPredictionJob, getPredictionResult, getPredictionDirectlyFromGemini } from './services/geminiService';
-import { HistoryItem, TeamPerformanceStats, PredictionResultData } from './types';
-import { initializeSupabaseClient, getPredictionHistory, getAccuracyStats, updatePredictionStatus, mapPredictionToHistoryItem } from './services/supabaseService';
+import { HistoryItem } from './types';
+import { initializeSupabaseClient, getAccuracyStats, mapPredictionToHistoryItem } from './services/supabaseService';
 import { getTheme, setTheme as saveTheme } from './services/localStorageService';
-import { syncPredictionStatuses } from './services/syncService';
 import Loader from './components/Loader';
 import PredictionResult from './components/PredictionResult';
-import { FTLogoIcon, SunIcon, MoonIcon, WarningIcon } from './components/icons';
+import { FTLogoIcon, SunIcon, MoonIcon } from './components/icons';
 import TeamInput from './components/TeamInput';
 import DonationBlock from './components/DonationBlock';
 import CategoryToggle from './components/CategoryToggle';
-import PredictionHistory from './components/PredictionHistory';
-import PredictionFeed from './components/PredictionFeed';
-import TicketModal from './components/TicketModal';
-import TrackRecord from './components/TrackRecord';
 import Footer from './components/Footer';
 import HeaderAccuracyTracker from './components/HeaderAccuracyTracker';
 import LiveScores from './components/LiveScores';
+import ApiKeyInstructions from './components/ApiKeyInstructions';
 
 interface AccuracyStats {
     total: number;
@@ -31,13 +27,9 @@ const App: React.FC = () => {
     const [error, setError] = useState<string | null>(null);
     const [appStatus, setAppStatus] = useState<'initializing' | 'ready' | 'failed'>('initializing');
     const [initError, setInitError] = useState<string | null>(null);
-    const [history, setHistory] = useState<HistoryItem[]>([]);
     const [accuracyStats, setAccuracyStats] = useState<AccuracyStats>({ total: 0, wins: 0 });
     const [theme, setTheme] = useState<'light' | 'dark'>(getTheme());
     const [matchCategory, setMatchCategory] = useState<'men' | 'women'>('men');
-    const [selectedTicket, setSelectedTicket] = useState<HistoryItem | null>(null);
-    const [isSyncing, setIsSyncing] = useState<boolean>(false);
-    const [teamPerformanceStats, setTeamPerformanceStats] = useState<{ teamA: TeamPerformanceStats; teamB: TeamPerformanceStats } | null>(null);
 
     // Ref to hold the polling interval ID and polling timeout ID
     const pollingIntervalRef = useRef<number | null>(null);
@@ -56,11 +48,7 @@ const App: React.FC = () => {
 
     const refreshData = useCallback(async () => {
         try {
-            const [fetchedHistory, fetchedStats] = await Promise.all([
-                getPredictionHistory(),
-                getAccuracyStats()
-            ]);
-            setHistory(fetchedHistory);
+            const fetchedStats = await getAccuracyStats();
             setAccuracyStats(fetchedStats);
         } catch (err) {
             // Re-throw to be handled by the caller
@@ -97,33 +85,6 @@ const App: React.FC = () => {
         saveTheme(theme);
     }, [theme]);
     
-    useEffect(() => {
-        if (predictionResult && history.length > 0) {
-            const calculateStatsForTeam = (teamName: string): TeamPerformanceStats => {
-                const teamHistory = history.filter(item => 
-                    (item.teamA === teamName || item.teamB === teamName) && (item.status === 'won' || item.status === 'lost')
-                );
-                
-                const wins = teamHistory.filter(item => item.status === 'won').length;
-                
-                const recentOutcomes = teamHistory.slice(0, 5).map(item => item.status);
-    
-                return {
-                    total: teamHistory.length,
-                    wins: wins,
-                    recentOutcomes: recentOutcomes
-                };
-            };
-    
-            setTeamPerformanceStats({
-                teamA: calculateStatsForTeam(predictionResult.teamA),
-                teamB: calculateStatsForTeam(predictionResult.teamB),
-            });
-        } else {
-            setTeamPerformanceStats(null);
-        }
-    }, [predictionResult, history]);
-
     const toggleTheme = () => {
         setTheme(prevTheme => (prevTheme === 'light' ? 'dark' : 'light'));
     };
@@ -137,16 +98,6 @@ const App: React.FC = () => {
         setTeamB('');
     };
 
-    const handleUpdatePredictionStatus = async (id: string, status: 'won' | 'lost') => {
-        try {
-            await updatePredictionStatus(id, status);
-            await refreshData();
-        } catch (err) {
-            const errorMessage = err instanceof Error ? err.message : 'An error occurred while updating status.';
-            setError(errorMessage);
-        }
-    };
-    
     const handlePredict = useCallback(async () => {
         setIsLoading(true);
         setError(null);
@@ -238,18 +189,6 @@ const App: React.FC = () => {
         }
     }, [teamA, teamB, matchCategory, refreshData, clearPolling]);
     
-    const handleSync = async () => {
-        setIsSyncing(true);
-        try {
-            await syncPredictionStatuses();
-            await refreshData();
-        } catch (err) {
-            console.error("Sync failed:", err);
-        } finally {
-            setIsSyncing(false);
-        }
-    };
-
     const renderAppContent = () => {
         if (appStatus === 'initializing') {
             return (
@@ -264,6 +203,12 @@ const App: React.FC = () => {
                 <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
                     {/* Left column: Predictor and History */}
                     <div className="space-y-8 lg:col-span-3">
+                         {initError && (
+                             <div className="p-4 bg-yellow-50 dark:bg-yellow-900/40 border border-yellow-400 dark:border-yellow-500/50 rounded-lg text-yellow-800 dark:text-yellow-200">
+                                <p className="font-semibold">Backend Notice:</p>
+                                <p className="text-sm">{initError}</p>
+                            </div>
+                        )}
                         <div className="bg-white dark:bg-gray-800/50 backdrop-blur-sm border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg p-6 sm:p-8 animate-fade-in-down">
                             <h2 className="text-center text-3xl font-bold text-gray-900 dark:text-white mb-6">
                                 The Predictor
@@ -335,19 +280,16 @@ const App: React.FC = () => {
                         
                         {(error || predictionResult) && !isLoading && (
                              <div className="animate-fade-in-down">
-                                <PredictionResult result={predictionResult} error={error} teamA={teamA} teamB={teamB} teamPerformanceStats={teamPerformanceStats} />
+                                <PredictionResult result={predictionResult} error={error} teamA={teamA} teamB={teamB} />
                              </div>
                         )}
 
-                        <PredictionFeed tickets={history} />
-                        <TrackRecord history={history} />
-                        <PredictionHistory tickets={history} onUpdateStatus={handleUpdatePredictionStatus} onSelectTicket={setSelectedTicket} onSync={handleSync} isSyncing={isSyncing} />
                     </div>
 
                     {/* Right column: Live Scores and Sidebar */}
                     <div className="space-y-8 lg:col-span-1">
                         <div className="lg:sticky lg:top-28 space-y-8">
-                            <LiveScores disabled={false} />
+                            <LiveScores />
                             <DonationBlock />
                         </div>
                     </div>
@@ -385,8 +327,7 @@ const App: React.FC = () => {
             <main className="py-8 sm:py-10 flex-grow">
                {renderAppContent()}
             </main>
-
-            <TicketModal ticket={selectedTicket} onClose={() => setSelectedTicket(null)} />
+            
             <Footer />
         </div>
     );

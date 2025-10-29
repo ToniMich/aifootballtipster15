@@ -1,10 +1,9 @@
 import React from 'react';
-import { PredictionResultData, BestBet, PlayerStat, GoalScorerPrediction, TeamPerformanceStats, HistoryItem, HeadToHeadStats } from '../types';
-import { ChartPieIcon, WarningIcon, LocationMarkerIcon, CalendarIcon, WhistleIcon, FireIcon, LightningBoltIcon, TableCellsIcon, TrophyIcon, AssistIcon, CardIcon, TicketIcon } from './icons';
+import { HistoryItem, HeadToHeadStats, PlayerStat, GoalScorerPrediction } from '../types';
+import { ChartPieIcon, WarningIcon, LocationMarkerIcon, CalendarIcon, WhistleIcon, LightningBoltIcon, TableCellsIcon, TrophyIcon, AssistIcon, CardIcon } from './icons';
 import TeamLogo from './TeamLogo';
 import SocialShare from './SocialShare';
 import GoalProbabilityChart from './GoalProbabilityChart';
-import TeamPerformanceTracker from './TeamPerformanceTracker';
 import BestBetsGrid from './BestBetsGrid';
 import HeadToHeadVisual from './HeadToHeadVisual';
 
@@ -13,7 +12,6 @@ interface PredictionResultProps {
   error: string | null;
   teamA: string;
   teamB: string;
-  teamPerformanceStats: { teamA: TeamPerformanceStats; teamB: TeamPerformanceStats } | null;
 }
 
 // Helper function to safely render content that should be a string or number
@@ -83,50 +81,6 @@ const ConfidenceBar: React.FC<{ confidence: string }> = ({ confidence }) => {
     );
 };
 
-const ConfidenceRing: React.FC<{ percentage: number }> = ({ percentage }) => {
-    const radius = 30;
-    const stroke = 5;
-    const normalizedRadius = radius - stroke * 2;
-    const circumference = normalizedRadius * 2 * Math.PI;
-    const strokeDashoffset = circumference - (percentage / 100) * circumference;
-
-    return (
-        <div className="relative h-20 w-20">
-            <svg
-                height="100%"
-                width="100%"
-                viewBox="0 0 70 70"
-                className="transform -rotate-90"
-            >
-                <circle
-                    className="text-gray-200 dark:text-gray-600"
-                    stroke="currentColor"
-                    strokeWidth={stroke}
-                    fill="transparent"
-                    r={normalizedRadius}
-                    cx={radius}
-                    cy={radius}
-                />
-                <circle
-                    className="text-green-500"
-                    stroke="currentColor"
-                    strokeWidth={stroke}
-                    strokeDasharray={circumference + ' ' + circumference}
-                    style={{ strokeDashoffset, transition: 'stroke-dashoffset 0.5s ease-out' }}
-                    strokeLinecap="round"
-                    fill="transparent"
-                    r={normalizedRadius}
-                    cx={radius}
-                    cy={radius}
-                />
-            </svg>
-            <span className="absolute inset-0 flex items-center justify-center text-lg font-bold text-gray-800 dark:text-gray-200">
-                {`${percentage}%`}
-            </span>
-        </div>
-    );
-};
-
 const InfoCard: React.FC<{ icon: React.ReactNode, title: string, value: any }> = ({ icon, title, value }) => {
     const safeValue = renderSafely(value);
     if (!safeValue || safeValue === 'N/A') return null;
@@ -190,7 +144,7 @@ const GoalScorerCard: React.FC<{ prediction: GoalScorerPrediction }> = ({ predic
 );
 
 
-const PredictionResult: React.FC<PredictionResultProps> = ({ result, error, teamA, teamB, teamPerformanceStats }) => {
+const PredictionResult: React.FC<PredictionResultProps> = ({ result, error, teamA, teamB }) => {
     if (error) {
         return (
             <div className="p-6 bg-red-100 dark:bg-red-900/50 border border-red-400 dark:border-red-500 rounded-lg text-red-800 dark:text-red-300 animate-fade-in">
@@ -232,11 +186,6 @@ const PredictionResult: React.FC<PredictionResultProps> = ({ result, error, team
         teamB_wins: result.keyStats.head_to_head.teamA_wins,
     } : result.keyStats.head_to_head;
     
-    const perfStats = teamPerformanceStats ? {
-        teamA: teamsAreSwapped ? teamPerformanceStats.teamB : teamPerformanceStats.teamA,
-        teamB: teamsAreSwapped ? teamPerformanceStats.teamA : teamPerformanceStats.teamB,
-    } : null;
-
     return (
         <div className="bg-white dark:bg-gray-800/50 backdrop-blur-sm border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg animate-fade-in overflow-hidden">
             {/* Header */}
@@ -341,18 +290,6 @@ const PredictionResult: React.FC<PredictionResultProps> = ({ result, error, team
                         <p className="text-gray-700 dark:text-gray-300 text-base leading-relaxed">{renderSafely(result.analysis, 'Analysis not available.')}</p>
                     </div>
                 </section>
-
-                {/* AI Team Performance */}
-                {perfStats && (
-                    <TeamPerformanceTracker 
-                        teamA={teamA} 
-                        teamB={teamB} 
-                        statsA={perfStats.teamA} 
-                        statsB={perfStats.teamB} 
-                        logoA={logoA}
-                        logoB={logoB}
-                    />
-                )}
 
                 {/* Goal Probabilities */}
                 {result.goalProbabilities && <GoalProbabilityChart probabilities={result.goalProbabilities} />}

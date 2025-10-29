@@ -24,3 +24,25 @@ export function setTheme(theme: 'light' | 'dark'): void {
         }
     }
 }
+
+export function getSportsDbKey(): string | null {
+    if (typeof window !== 'undefined') {
+        try {
+            return localStorage.getItem('thesportsdb_api_key');
+        } catch (e) {
+            console.error('Could not access localStorage for API key:', e);
+            return null;
+        }
+    }
+    return null;
+}
+
+export function setSportsDbKey(key: string): void {
+    if (typeof window !== 'undefined') {
+        try {
+            localStorage.setItem('thesportsdb_api_key', key);
+        } catch (e) {
+            console.error('Could not access localStorage to set API key:', e);
+        }
+    }
+}

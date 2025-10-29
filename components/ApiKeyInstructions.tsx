@@ -1,8 +1,7 @@
 import React from 'react';
 
-// This component is no longer used as TheSportsDB API calls are now
-// securely proxied through a Supabase Edge Function, which uses secrets
-// configured on the backend.
-const ApiKeyInstructions: React.FC<{ onKeySave: (key: string) => void; }> = () => null;
+// This component is no longer needed. The API key for live scores
+// is now securely managed by a Supabase Edge Function on the backend.
+const ApiKeyInstructions: React.FC = () => null;
 
 export default ApiKeyInstructions;

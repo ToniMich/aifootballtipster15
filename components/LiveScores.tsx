@@ -3,10 +3,6 @@ import { LiveMatch } from '../types';
 import { RefreshIcon, WarningIcon } from './icons';
 import { fetchLiveScores } from '../services/theSportsDBService';
 
-interface LiveScoresProps {
-    disabled?: boolean;
-}
-
 const LiveIndicator: React.FC = () => (
     <div className="flex items-center gap-1.5">
         <span className="relative flex h-2 w-2">
@@ -46,18 +42,13 @@ const MatchScore: React.FC<{ match: LiveMatch }> = ({ match }) => {
     );
 };
 
-const LiveScores: React.FC<LiveScoresProps> = ({ disabled = false }) => {
+const LiveScores: React.FC = () => {
     const [matches, setMatches] = useState<LiveMatch[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
 
     const fetchScores = useCallback(async () => {
-        if (disabled) {
-            setIsLoading(false);
-            setError("Setup incomplete. Cannot fetch scores.");
-            return;
-        }
         setIsLoading(true);
         setError(null);
         try {
@@ -71,22 +62,16 @@ const LiveScores: React.FC<LiveScoresProps> = ({ disabled = false }) => {
         } finally {
             setIsLoading(false);
         }
-    }, [disabled]);
+    }, []);
     
     useEffect(() => {
         fetchScores();
-        // Set up an interval to refetch scores every 60 seconds
         const interval = setInterval(fetchScores, 60000);
-        // Clean up the interval when the component unmounts or dependencies change
         return () => clearInterval(interval);
     }, [fetchScores]);
 
-    const handleRefresh = () => {
-        fetchScores();
-    };
-
     const renderContent = () => {
-        if (isLoading) {
+        if (isLoading && matches.length === 0) {
             return (
                 <div className="p-4 text-center">
                     <p className="text-gray-500 dark:text-gray-400">Loading live scores...</p>
@@ -99,15 +84,13 @@ const LiveScores: React.FC<LiveScoresProps> = ({ disabled = false }) => {
                 <div className="p-4 text-center bg-red-50 dark:bg-red-900/30">
                     <WarningIcon className="h-6 w-6 text-red-500 mx-auto mb-2" />
                     <p className="font-semibold text-red-600 dark:text-red-400">Could not load scores</p>
-                    <p className="text-xs text-red-500 dark:text-red-400/80 mb-3">{error.replace('[Network Error] Failed to fetch scores: ', '')}</p>
-                    {!disabled && (
-                        <button
-                            onClick={handleRefresh}
-                            className="px-3 py-1 bg-red-100 text-red-700 dark:bg-red-900/50 dark:text-red-300 text-sm font-semibold rounded-md hover:bg-red-200 dark:hover:bg-red-900 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 dark:focus:ring-offset-gray-800 transition-colors"
-                        >
-                            Retry
-                        </button>
-                    )}
+                    <p className="text-xs text-red-500 dark:text-red-400/80 mb-3">{error.replace('Failed to invoke Edge Function. Does the Edge Function exist?', 'The live scores service is currently unavailable.')}</p>
+                    <button
+                        onClick={fetchScores}
+                        className="px-3 py-1 bg-red-100 text-red-700 dark:bg-red-900/50 dark:text-red-300 text-sm font-semibold rounded-md hover:bg-red-200 dark:hover:bg-red-900 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 dark:focus:ring-offset-gray-800 transition-colors"
+                    >
+                        Retry
+                    </button>
                 </div>
             );
         }
@@ -135,7 +118,7 @@ const LiveScores: React.FC<LiveScoresProps> = ({ disabled = false }) => {
                 <div className="p-4 border-b border-gray-200 dark:border-gray-700 relative">
                     <div className="text-center">
                         <h2 className="text-xl font-bold text-gray-900 dark:text-white">Live Scores</h2>
-                        {lastUpdated && !disabled ? (
+                        {lastUpdated ? (
                             <p className="text-xs text-gray-500 dark:text-gray-400">
                                 Last updated: {lastUpdated.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                             </p>
@@ -145,8 +128,8 @@ const LiveScores: React.FC<LiveScoresProps> = ({ disabled = false }) => {
                     </div>
                     <div className="absolute top-3 right-3">
                          <button 
-                            onClick={handleRefresh} 
-                            disabled={isLoading || disabled}
+                            onClick={fetchScores} 
+                            disabled={isLoading}
                             className="p-1.5 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors" 
                             aria-label="Refresh live scores"
                             title="Refresh live scores"
