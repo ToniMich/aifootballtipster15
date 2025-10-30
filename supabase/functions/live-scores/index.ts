@@ -1,6 +1,6 @@
 // supabase/functions/live-scores/index.ts
 
-import { corsHeaders } from '../_shared/cors.ts'
+import { corsHeaders } from '../shared/cors.ts'
 import { load } from "https://deno.land/std@0.224.0/dotenv/mod.ts";
 
 // Fix for "Cannot find name 'Deno'" error in Supabase Edge Functions.

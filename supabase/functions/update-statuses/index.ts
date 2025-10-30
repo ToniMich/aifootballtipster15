@@ -1,8 +1,8 @@
 // supabase/functions/update-statuses/index.ts
 
-import { corsHeaders } from '../_shared/cors.ts'
-import { normalizeTeamName } from '../_shared/teamNameNormalizer.ts'
-import { supabaseAdminClient as supabase } from '../_shared/init.ts'
+import { corsHeaders } from '../shared/cors.ts'
+import { normalizeTeamName } from '../shared/teamNameNormalizer.ts'
+import { supabaseAdminClient as supabase } from '../shared/init.ts'
 
 // Fix for "Cannot find name 'Deno'" error in Supabase Edge Functions.
 declare const Deno: any;
