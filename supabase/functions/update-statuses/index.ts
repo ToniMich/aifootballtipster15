@@ -1,6 +1,5 @@
 // supabase/functions/update-statuses/index.ts
 
-// FIX: Corrected import paths for shared utilities.
 import { corsHeaders } from 'shared/cors.ts'
 import { normalizeTeamName } from 'shared/teamNameNormalizer.ts'
 import { supabaseAdminClient as supabase } from 'shared/init.ts'

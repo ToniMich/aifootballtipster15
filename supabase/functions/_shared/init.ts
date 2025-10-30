@@ -1,6 +1,6 @@
 // supabase/functions/shared/init.ts
 
-import { createClient } from 'npm:@supabase/supabase-js@2.44.4';
+import { createClient } from '@supabase/supabase-js';
 
 // This file centralizes the creation of Supabase clients for Edge Functions.
 // It ensures that environment variables are checked once at startup, preventing

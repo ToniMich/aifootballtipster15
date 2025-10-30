@@ -113,6 +113,8 @@ export interface HistoryItem extends PredictionResultData {
     matchCategory: 'men' | 'women';
     status?: 'pending' | 'won' | 'lost' | 'processing' | 'failed' | null;
     tally: number;
+    // Fix: Add optional error field to carry messages from failed jobs.
+    error?: string;
 }
 
 export interface LiveMatch {

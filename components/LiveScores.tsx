@@ -42,7 +42,6 @@ const MatchScore: React.FC<{ match: LiveMatch }> = ({ match }) => {
     );
 };
 
-// FIX: Add a `disabled` prop to allow parent components to control functionality.
 interface LiveScoresProps {
     disabled?: boolean;
 }
@@ -55,8 +54,6 @@ const LiveScores: React.FC<LiveScoresProps> = ({ disabled }) => {
 
     const fetchScores = useCallback(async () => {
         if (disabled) {
-            setMatches([]);
-            setError("Live scores are currently disabled.");
             setIsLoading(false);
             return;
         }
@@ -116,7 +113,7 @@ const LiveScores: React.FC<LiveScoresProps> = ({ disabled }) => {
         }
 
         return (
-             <div className="p-3 space-y-3 max-h-[450px] lg:max-h-[50vh] overflow-y-auto">
+             <div className="p-3 space-y-3 max-h-[450px] lg:max-h-[calc(100vh-200px)] overflow-y-auto">
                 {matches.map((match) => (
                     <MatchScore key={match.id} match={match} />
                 ))}
@@ -151,7 +148,12 @@ const LiveScores: React.FC<LiveScoresProps> = ({ disabled }) => {
                     </div>
                 </div>
                 
-                {renderContent()}
+                {disabled ? (
+                    <div className="p-6 text-center text-gray-500 dark:text-gray-400">
+                        <p>Live scores are unavailable.</p>
+                        <p className="text-sm">The application backend is not configured.</p>
+                    </div>
+                ) : renderContent()}
 
                 <div className="p-3 text-center border-t border-gray-200 dark:border-gray-700">
                     <p className="text-xs text-gray-500 dark:text-gray-400">

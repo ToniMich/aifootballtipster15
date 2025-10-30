@@ -12,6 +12,7 @@ interface PredictionResultProps {
   error: string | null;
   teamA: string;
   teamB: string;
+  onViewTeamStats: (teamName: string) => void;
 }
 
 // Helper function to safely render content that should be a string or number
@@ -144,7 +145,7 @@ const GoalScorerCard: React.FC<{ prediction: GoalScorerPrediction }> = ({ predic
 );
 
 
-const PredictionResult: React.FC<PredictionResultProps> = ({ result, error, teamA, teamB }) => {
+const PredictionResult: React.FC<PredictionResultProps> = ({ result, error, teamA, teamB, onViewTeamStats }) => {
     if (error) {
         return (
             <div className="p-6 bg-red-100 dark:bg-red-900/50 border border-red-400 dark:border-red-500 rounded-lg text-red-800 dark:text-red-300 animate-fade-in">
@@ -201,7 +202,11 @@ const PredictionResult: React.FC<PredictionResultProps> = ({ result, error, team
                         {/* Team A */}
                         <div className="flex flex-col items-center justify-start gap-3 min-w-0">
                             <TeamLogo logoUrl={logoA} teamName={String(teamA)} sizeClass="h-16 w-16" />
-                            <h3 className="text-xl font-bold text-gray-800 dark:text-gray-200 break-words">
+                            <h3 
+                                className="text-xl font-bold text-gray-800 dark:text-gray-200 break-words cursor-pointer hover:underline"
+                                onClick={() => onViewTeamStats(teamA)}
+                                title={`View stats for ${teamA}`}
+                            >
                                 {renderSafely(teamA)}
                             </h3>
                         </div>
@@ -212,7 +217,11 @@ const PredictionResult: React.FC<PredictionResultProps> = ({ result, error, team
                         {/* Team B */}
                         <div className="flex flex-col items-center justify-start gap-3 min-w-0">
                             <TeamLogo logoUrl={logoB} teamName={String(teamB)} sizeClass="h-16 w-16" />
-                            <h3 className="text-xl font-bold text-gray-800 dark:text-gray-200 break-words">
+                            <h3 
+                                className="text-xl font-bold text-gray-800 dark:text-gray-200 break-words cursor-pointer hover:underline"
+                                onClick={() => onViewTeamStats(teamB)}
+                                title={`View stats for ${teamB}`}
+                            >
                                 {renderSafely(teamB)}
                             </h3>
                         </div>
@@ -278,8 +287,20 @@ const PredictionResult: React.FC<PredictionResultProps> = ({ result, error, team
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <div className="p-4 bg-white dark:bg-gray-800 border dark:border-gray-700 rounded-lg">
                                 <h4 className="font-semibold mb-2">Recent Form</h4>
-                                <div className="flex justify-between items-center"><span>{renderSafely(teamA)}</span><TeamForm form={formA} /></div>
-                                <div className="flex justify-between items-center mt-2"><span>{renderSafely(teamB)}</span><TeamForm form={formB} /></div>
+                                <div className="flex justify-between items-center">
+                                    <span 
+                                        className="cursor-pointer hover:underline"
+                                        onClick={() => onViewTeamStats(teamA)}
+                                    >{renderSafely(teamA)}</span>
+                                    <TeamForm form={formA} />
+                                </div>
+                                <div className="flex justify-between items-center mt-2">
+                                    <span 
+                                        className="cursor-pointer hover:underline"
+                                        onClick={() => onViewTeamStats(teamB)}
+                                    >{renderSafely(teamB)}</span>
+                                    <TeamForm form={formB} />
+                                </div>
                             </div>
                              <div className="p-4 bg-white dark:bg-gray-800 border dark:border-gray-700 rounded-lg">
                                  <HeadToHeadVisual stats={h2hStats} teamAName={teamA} teamBName={teamB} />

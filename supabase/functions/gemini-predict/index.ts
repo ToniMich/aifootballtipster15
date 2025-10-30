@@ -1,8 +1,7 @@
 // supabase/functions/gemini-predict/index.ts
 
-// FIX: Corrected import paths for shared utilities.
 import { supabaseAdminClient as supabase } from 'shared/init.ts'
-import { GoogleGenAI, Type } from 'npm:@google/genai@1.24.0';
+import { GoogleGenAI, Type } from '@google/genai';
 
 // Fix for "Cannot find name 'Deno'" error in Supabase Edge Functions.
 declare const Deno: any;
@@ -89,43 +88,8 @@ const predictionSchema = {
     required: ['prediction', 'confidence', 'teamA_winProbability', 'teamB_winProbability', 'drawProbability', 'analysis', 'keyStats', 'bestBets', 'availabilityFactors', 'venue', 'kickoffTime', 'referee', 'leagueContext', 'playerStats', 'goalScorerPredictions', 'goalProbabilities', 'bttsPrediction', 'overUnderPrediction']
 };
 
-const cleanLogoUrl = (url: string | null | undefined): string | undefined => {
-    if (typeof url === 'string' && url.endsWith('/preview')) {
-        return url.slice(0, -8); // Removes '/preview'
-    }
-    return url || undefined;
-};
-
-interface TeamDetails {
-    idTeam: string;
-    strTeam: string;
-    strTeamBadge: string;
-}
-
-const fetchTeamLogo = async (teamName: string, apiKey: string): Promise<string | undefined> => {
-    if (!teamName) return undefined;
-    try {
-        const url = `https://www.thesportsdb.com/api/v1/json/${apiKey}/searchteams.php?t=${encodeURIComponent(teamName)}`;
-        const response = await fetch(url);
-        if (!response.ok) {
-            console.warn(`Failed to fetch logo for ${teamName}. Status: ${response.status}`);
-            return undefined;
-        }
-        const data = await response.json() as { teams?: TeamDetails[] };
-        if (data.teams && data.teams.length > 0) {
-            const exactMatch = data.teams.find(t => t.strTeam.toLowerCase() === teamName.toLowerCase());
-            const team = exactMatch || data.teams[0];
-            return cleanLogoUrl(team.strTeamBadge);
-        }
-    } catch (error) {
-        console.error(`Error fetching logo for ${teamName}:`, error.message);
-    }
-    return undefined;
-};
-
 Deno.serve(async (req: Request) => {
     const geminiApiKey = Deno.env.get('API_KEY');
-    const sportsDbApiKey = Deno.env.get('THESPORTSDB_API_KEY');
     
     let jobId: string | null = null;
     let body;
@@ -151,8 +115,8 @@ Deno.serve(async (req: Request) => {
         }
     };
 
-    if (!geminiApiKey || !sportsDbApiKey) {
-        const errorMsg = '[Configuration Error] Server configuration is incomplete. Ensure API_KEY and THESPORTSDB_API_KEY are set.';
+    if (!geminiApiKey) {
+        const errorMsg = '[Configuration Error] Server configuration is incomplete. Ensure API_KEY is set.';
         await failJob(errorMsg);
         return new Response(JSON.stringify({ error: "Server configuration error" }), { status: 500 });
     }
@@ -200,14 +164,6 @@ ${JSON.stringify(predictionSchema, null, 2)}
         
         // Add sources from grounding
         predictionData.sources = response.candidates?.[0]?.groundingMetadata?.groundingChunks || [];
-
-        const [teamA_logo, teamB_logo] = await Promise.all([
-            fetchTeamLogo(teamA, sportsDbApiKey),
-            fetchTeamLogo(teamB, sportsDbApiKey)
-        ]);
-        
-        predictionData.teamA_logo = teamA_logo;
-        predictionData.teamB_logo = teamB_logo;
 
         const { error: updateError } = await supabase
             .from('predictions')

@@ -1,6 +1,5 @@
 // supabase/functions/get-prediction/index.ts
 
-// FIX: Corrected import paths for shared utilities.
 import { corsHeaders } from 'shared/cors.ts'
 import { supabaseAdminClient as supabase } from 'shared/init.ts'
 

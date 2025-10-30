@@ -1,15 +1,16 @@
 import { LiveMatch } from '../types';
 import { getSupabaseClient, isAppConfigured } from './supabaseService';
 
-// This is the type returned by the new 'live-scores' function
-interface RawLiveScore {
-    league: string;
-    status: string; // e.g., "Live 68'", "HT", "FT"
-    minute: string | null; // e.g., "68'"
-    home: string;
-    away: string;
-    score_home: number | null;
-    score_away: number | null;
+// This interface describes the structure of a single match object
+// returned by the updated 'live-scores' Edge Function.
+interface RawLiveMatch {
+    idEvent: string | null;
+    league: string | null;
+    home: string | null;
+    away: string | null;
+    homeScore: number | null;
+    awayScore: number | null;
+    status: string | null; // e.g., "68", "HT", "Finished"
 }
 
 /**
@@ -27,7 +28,8 @@ export async function fetchLiveScores(): Promise<LiveMatch[]> {
     
     try {
         const supabase = await getSupabaseClient();
-        // Invoke the new 'live-scores' function
+        // Invoke the 'live-scores' function.
+        // The new function returns an object like { cached: boolean, matches: [...] }
         const { data, error } = await supabase.functions.invoke('live-scores');
 
         if (error) {
@@ -35,29 +37,36 @@ export async function fetchLiveScores(): Promise<LiveMatch[]> {
             throw new Error(error.message);
         }
         
-        // The new function returns { data: RawLiveScore[] }
-        const rawScores: RawLiveScore[] = data.data || [];
+        // The array of matches is now under the `matches` key.
+        const rawMatches: RawLiveMatch[] = data.matches || [];
 
-        // Map the raw data to the LiveMatch format expected by the UI
-        return rawScores.map((score): LiveMatch => {
-            const displayStatus = (score.status || '').toUpperCase();
+        // Map the new raw data format to the LiveMatch format expected by the UI
+        return rawMatches.map((match): LiveMatch => {
+            const displayStatus = (match.status || '').toUpperCase();
             let status: LiveMatch['status'] = 'Not Started';
-            if (displayStatus.startsWith('LIVE')) {
+            let time = match.status || 'NS'; // Default time to the status string
+
+            // Determine the standardized status and time for the UI
+            if (displayStatus.includes("'") || /^\d+$/.test(displayStatus) || displayStatus.includes("LIVE")) {
                 status = 'LIVE';
-            } else if (displayStatus === 'HT') {
+                const minuteMatch = displayStatus.match(/\d+/); // Extract numbers
+                time = minuteMatch ? `${minuteMatch[0]}'` : 'Live';
+            } else if (displayStatus === 'HT' || displayStatus.includes('HALF')) {
                 status = 'HT';
-            } else if (displayStatus === 'FT') {
+                time = 'HT';
+            } else if (displayStatus === 'FT' || displayStatus.includes('FINISHED')) {
                 status = 'FT';
+                time = 'FT';
             }
 
             return {
-                id: `${score.league}-${score.home}-${score.away}`, // Create a stable key
-                league: score.league,
-                teamA: score.home,
-                teamB: score.away,
-                scoreA: score.score_home,
-                scoreB: score.score_away,
-                time: score.minute || score.status, // Use minute if available, otherwise the short status
+                id: match.idEvent || `${match.league}-${match.home}-${match.away}`, // Use event ID if available
+                league: match.league || 'Unknown League',
+                teamA: match.home || 'Team A',
+                teamB: match.away || 'Team B',
+                scoreA: match.homeScore,
+                scoreB: match.awayScore,
+                time: time,
                 status: status,
             };
         });

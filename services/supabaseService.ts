@@ -1,7 +1,7 @@
 // services/supabaseService.ts
 
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
-import { HistoryItem, RawPrediction, AccuracyStats, PredictionResultData } from '../types';
+import { HistoryItem, RawPrediction, AccuracyStats, PredictionResultData, TeamPerformanceStats } from '../types';
 
 let supabaseClient: SupabaseClient | null = null;
 let isPlaceholderMode = false;
@@ -188,6 +188,8 @@ export const mapPredictionToHistoryItem = (rawPrediction: RawPrediction): Histor
         timestamp: rawPrediction.created_at,
         status: rawPrediction.status,
         tally: rawPrediction.tally,
+        // Fix: Carry over any error message from the raw prediction data.
+        error: predictionData.error,
     };
 };
 
@@ -208,12 +210,28 @@ export const getPredictionHistory = async (): Promise<HistoryItem[]> => {
     return (data || []).map(mapPredictionToHistoryItem);
 };
 
+export const deletePrediction = async (id: string): Promise<void> => {
+    if (!isAppConfigured()) {
+        throw new Error("Cannot delete prediction: App is not configured.");
+    }
+
+    const supabase = await getSupabaseClient();
+    const { error } = await supabase
+        .from('predictions')
+        .delete()
+        .eq('id', id);
+
+    if (error) {
+        throw new Error(`[Database Error] Could not delete prediction: ${error.message}`);
+    }
+};
+
+
 export const getAccuracyStats = async (): Promise<AccuracyStats> => {
     if (!isAppConfigured()) {
-        // This throw is critical for the app's initialization logic.
-        // It ensures that if the backend is not configured, the app enters a
-        // 'failed' state instead of incorrectly becoming 'ready'.
-        throw new Error("Application backend is not configured, cannot fetch stats.");
+        // Return a default state instead of throwing an error, so the UI
+        // can gracefully show "0" stats when the backend is unavailable.
+        return { total: 0, wins: 0 };
     }
 
     const supabase = await getSupabaseClient();
@@ -230,6 +248,25 @@ export const getAccuracyStats = async (): Promise<AccuracyStats> => {
         total: completedPredictions.length,
         wins: completedPredictions.filter(p => p.status === 'won').length,
     };
+};
+
+export const getTeamPerformanceStats = async (teamName: string): Promise<TeamPerformanceStats> => {
+    if (!isAppConfigured()) {
+        throw new Error("Cannot fetch team stats. The application backend is not configured.");
+    }
+    const supabase = await getSupabaseClient();
+    const { data, error } = await supabase.functions.invoke('get-team-stats', {
+        body: { teamName },
+    });
+
+    if (error) {
+        const errorMessage = error.message.includes('Failed to fetch') 
+            ? 'The stats service is currently unavailable.'
+            : error.message;
+        throw new Error(`[Service Error] ${errorMessage}`);
+    }
+    
+    return data;
 };
 
 export const updatePredictionStatus = async (id: string, status: 'won' | 'lost'): Promise<void> => {
