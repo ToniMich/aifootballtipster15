@@ -1,165 +1,103 @@
-// live-scores (updated)
-// Assumptions:
-// - Deno runtime (Edge Function)
-// - THESPORTSDB_API_KEY set in environment
-// - Query params:
-//    ?league=<name>         -> case-insensitive partial match (optional)
-//    ?ttl=<seconds>         -> cache TTL in seconds (optional, default 20)
-// Example: /.netlify/functions/live-scores?league=Mongolian&ttl=10
+// supabase/functions/live-scores/index.ts
 
-console.info('live-scores function starting');
+import { corsHeaders } from '../_shared/cors.ts'
 
 // Fix for "Cannot find name 'Deno'" error in Supabase Edge Functions.
 declare const Deno: any;
 
-const DEFAULT_TTL_SECONDS = 20;
-const DEFAULT_TIMEOUT_MS = 5000; // upstream fetch timeout
+const API_TIMEOUT_MS = 8000;
 
-function jsonResponse(obj: unknown, status = 200, extraHeaders: Record<string,string> = {}) {
-  const headers: Record<string,string> = {
-    'Content-Type': 'application/json',
-    'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Methods': 'GET,OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type,Authorization'
-  };
-  Object.assign(headers, extraHeaders);
-  return new Response(JSON.stringify(obj), { status, headers });
+interface TheSportsDBEvent {
+  idEvent: string | null;
+  strLeague: string | null;
+  strHomeTeam: string | null;
+  strAwayTeam: string | null;
+  intHomeScore: string | null;
+  intAwayScore: string | null;
+  strStatus: string | null;
 }
 
-function normalizeMatch(m: any) {
-  return {
-    idLiveScore: m.idLiveScore ?? m.idEvent ?? null,
-    idEvent: m.idEvent ?? null,
-    league: m.strLeague ?? null,
-    event: m.strEvent ?? null,
-    home: m.strHomeTeam ?? null,
-    away: m.strAwayTeam ?? null,
-    homeScore: m.intHomeScore !== undefined ? (m.intHomeScore === null ? null : Number(m.intHomeScore)) : null,
-    awayScore: m.intAwayScore !== undefined ? (m.intAwayScore === null ? null : Number(m.intAwayScore)) : null,
-    status: m.strStatus ?? null,
-    date: m.dateEvent ?? null,
-    time: m.strTime ?? null,
-    raw: m
-  };
-}
+// A robust normalization function to safely process API data
+const normalizeMatchData = (event: TheSportsDBEvent) => {
+    const parseScore = (score: string | null): number | null => {
+        if (score === null) return null;
+        const num = parseInt(score, 10);
+        return isNaN(num) ? null : num;
+    };
+
+    return {
+        idEvent: event.idEvent,
+        league: event.strLeague ?? 'Unknown League',
+        home: event.strHomeTeam ?? 'Team A',
+        away: event.strAwayTeam ?? 'Team B',
+        homeScore: parseScore(event.intHomeScore),
+        awayScore: parseScore(event.intAwayScore),
+        status: event.strStatus ?? 'Not Started',
+    };
+};
 
 Deno.serve(async (req: Request) => {
+  // Handle preflight OPTIONS request for CORS
+  if (req.method === 'OPTIONS') {
+    return new Response('ok', { headers: corsHeaders });
+  }
+
   try {
-    // CORS preflight
-    if (req.method === 'OPTIONS') {
-      return new Response(null, {
-        status: 204,
-        headers: {
-          'Access-Control-Allow-Origin': '*',
-          'Access-Control-Allow-Methods': 'GET,OPTIONS',
-          'Access-Control-Allow-Headers': 'Content-Type,Authorization'
-        }
-      });
-    }
-
-    const url = new URL(req.url);
-    const leagueQ = url.searchParams.get('league')?.trim() || null;
-    const ttlParam = url.searchParams.get('ttl');
-    const ttlSeconds = ttlParam ? Math.max(0, Number(ttlParam) || DEFAULT_TTL_SECONDS) : DEFAULT_TTL_SECONDS;
-
     const apiKey = Deno.env.get('THESPORTSDB_API_KEY');
     if (!apiKey) {
-      return jsonResponse({ error: 'Missing THESPORTSDB_API_KEY' }, 500);
+      // This is a critical server configuration issue.
+      throw new Error('Server configuration error: TheSportsDB API key is missing.');
     }
 
-    // Simple in-memory cache on globalThis to survive warm containers
-    const now = Date.now();
-    const globalAny: any = globalThis;
-    globalAny.__live_scores_cache = globalAny.__live_scores_cache || { ts: 0, ttl: 0, data: null };
-    const cache = globalAny.__live_scores_cache;
-
-    // Use cache if TTL matches and still fresh
-    if (cache.data && (now - cache.ts) < (ttlSeconds * 1000) && cache.ttl === ttlSeconds) {
-      // Serve cached results but still allow server-side filtering by league param
-      const raw = cache.data;
-      const matches = Array.isArray(raw.livescore) ? raw.livescore : (raw.events || raw.scores || []);
-      const filtered = filterAndNormalize(matches, leagueQ);
-      return jsonResponse({
-        cached: true,
-        league: leagueQ,
-        ttlSeconds,
-        timestamp: new Date(cache.ts).toISOString(),
-        count: filtered.length,
-        matches: filtered
-      }, 200);
-    }
-
-    // Build upstream URL (use the livescore endpoint)
-    const upstreamUrl = 'https://www.thesportsdb.com/api/v2/json/livescore/soccer';
-
-    // Fetch with timeout
+    const upstreamUrl = `https://www.thesportsdb.com/api/v1/json/${apiKey}/livescore.php?s=Soccer`;
+    
+    // Create a timeout controller for the external API fetch
     const controller = new AbortController();
-    const to = setTimeout(() => controller.abort(), DEFAULT_TIMEOUT_MS);
+    const timeoutId = setTimeout(() => controller.abort(), API_TIMEOUT_MS);
 
-    let upstreamRes: Response;
+    const response = await fetch(upstreamUrl, { signal: controller.signal });
+    clearTimeout(timeoutId); // Clear the timeout if the fetch was successful
+
+    // Read the response body as text to handle both JSON and non-JSON error responses gracefully
+    const responseText = await response.text();
+
+    if (!response.ok) {
+        // The upstream API returned a non-2xx status (e.g., 403, 500)
+        throw new Error(`The live scores service returned an error. Status: ${response.status}. Response: ${responseText}`);
+    }
+    
+    let data;
     try {
-      upstreamRes = await fetch(upstreamUrl, {
-        method: 'GET',
-        headers: {
-          'X-API-Key': apiKey
-        },
-        signal: controller.signal
-      });
-    } catch (err) {
-      clearTimeout(to);
-      console.error('Upstream fetch failed', err);
-      return jsonResponse({ error: 'Upstream fetch failed', message: String(err) }, 502);
-    }
-    clearTimeout(to);
-
-    if (!upstreamRes.ok) {
-      const text = await upstreamRes.text().catch(() => '');
-      console.error('Upstream not OK', upstreamRes.status, text);
-      return jsonResponse({ error: 'Upstream error', status: upstreamRes.status }, 502);
+        data = JSON.parse(responseText);
+    } catch (e) {
+        // The upstream API returned a 200 status but with an invalid JSON body
+        throw new Error(`Received an invalid response from the live scores provider. Response: ${responseText}`);
     }
 
-    const upstreamJson = await upstreamRes.json().catch((e) => {
-      console.error('Failed parsing upstream JSON', e);
-      return null;
+    // The SportsDB API for v1 returns `{ events: [...] }` on success or `{ events: null }` if none are live.
+    const rawEvents: TheSportsDBEvent[] | null = data.events;
+
+    // Normalize the data, ensuring we handle the case where `rawEvents` is null or not an array.
+    const matches = Array.isArray(rawEvents)
+        ? rawEvents.map(normalizeMatchData)
+        : [];
+
+    const responsePayload = {
+        cached: false, // This function performs a live fetch, so caching is always false.
+        matches: matches,
+    };
+
+    return new Response(JSON.stringify(responsePayload), {
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      status: 200,
     });
 
-    if (!upstreamJson) {
-      return jsonResponse({ error: 'Invalid upstream JSON' }, 502);
-    }
-
-    // Cache the raw upstream response
-    cache.ts = now;
-    cache.ttl = ttlSeconds;
-    cache.data = upstreamJson;
-
-    const matchesRaw = Array.isArray(upstreamJson.livescore) ? upstreamJson.livescore : (upstreamJson.events || upstreamJson.scores || []);
-    const filtered = filterAndNormalize(matchesRaw, leagueQ);
-
-    return jsonResponse({
-      cached: false,
-      league: leagueQ,
-      ttlSeconds,
-      timestamp: new Date(now).toISOString(),
-      count: filtered.length,
-      matches: filtered
-    }, 200);
-  } catch (err) {
-    console.error('Function error', err);
-    return jsonResponse({ error: 'Internal error', message: String(err) }, 500);
+  } catch (error) {
+    console.error('Critical error in live-scores function:', error);
+    // Propagate a clear error message to the client with a 500 status.
+    return new Response(JSON.stringify({ error: error.message }), {
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      status: 500,
+    });
   }
 });
-
-function filterAndNormalize(matches: any, leagueQuery: string | null) {
-  if (!Array.isArray(matches)) return [];
-  if (!leagueQuery) {
-    return matches.map(normalizeMatch);
-  }
-  const q = leagueQuery.toLowerCase();
-  return matches
-    .filter(m => {
-      const league = (m.strLeague || m.league || '').toString().toLowerCase();
-      const event = (m.strEvent || '').toString().toLowerCase();
-      return league.includes(q) || event.includes(q);
-    })
-    .map(normalizeMatch);
-}

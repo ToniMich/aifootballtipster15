@@ -1,3 +1,6 @@
+// Fix: Add a triple-slash directive to include the DOM library, which defines browser-specific types like 'Node' and 'document'.
+/// <reference lib="dom" />
+
 import React, { useState, useEffect, useRef } from 'react';
 import { teamNames } from '../data/teams';
 
@@ -28,7 +31,8 @@ const TeamInput: React.FC<TeamInputProps> = ({ id, value, onChange, placeholder,
     }, [wrapperRef]);
     
     const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const inputValue = e.target.value;
+        // Fix: Use `e.currentTarget.value` which is more type-safe in React and correctly typed as the element with the event listener.
+        const inputValue = e.currentTarget.value;
         onChange(inputValue);
 
         if (inputValue.length > 0) {

@@ -1,7 +1,7 @@
 // supabase/functions/get-prediction/index.ts
 
-import { corsHeaders } from 'shared/cors.ts'
-import { supabaseAdminClient as supabase } from 'shared/init.ts'
+import { corsHeaders } from '../_shared/cors.ts'
+import { supabaseAdminClient as supabase } from '../_shared/init.ts'
 
 declare const Deno: any;
 
@@ -12,7 +12,8 @@ Deno.serve(async (req: Request) => {
   }
 
   try {
-    const { jobId } = await req.json()
+    // Fix: Add type definition for the JSON body to resolve property access errors.
+    const { jobId }: { jobId: string } = await req.json();
     if (!jobId) {
       throw new Error('Missing required jobId parameter.')
     }

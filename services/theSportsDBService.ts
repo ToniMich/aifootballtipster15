@@ -1,5 +1,5 @@
 import { LiveMatch } from '../types';
-import { getSupabaseClient, isAppConfigured } from './supabaseService';
+import { getSupabaseClient } from './supabaseService';
 
 // This interface describes the structure of a single match object
 // returned by the updated 'live-scores' Edge Function.
@@ -14,22 +14,15 @@ interface RawLiveMatch {
 }
 
 /**
- * Fetches live soccer/football scores.
+ * Fetches live soccer/football scores by calling the backend Edge Function.
  * - Uses the secure 'live-scores' Supabase Edge Function which sources from TheSportsDB v2 API.
- * - Throws an error if the backend is not configured.
  * @returns {Promise<LiveMatch[]>} A promise that resolves to an array of live matches formatted for the UI.
  */
 export async function fetchLiveScores(): Promise<LiveMatch[]> {
-    if (!isAppConfigured()) {
-        console.warn("Backend not configured. Live scores service is unavailable.");
-        // Throw an error to be handled by the UI component, instead of showing placeholder data.
-        throw new Error("The live scores service is currently unavailable because the backend is not configured.");
-    }
-    
     try {
         const supabase = await getSupabaseClient();
         // Invoke the 'live-scores' function.
-        // The new function returns an object like { cached: boolean, matches: [...] }
+        // The function returns an object like { cached: boolean, matches: [...] }
         const { data, error } = await supabase.functions.invoke('live-scores');
 
         if (error) {

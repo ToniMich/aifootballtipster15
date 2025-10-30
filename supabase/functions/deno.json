@@ -1,7 +1,6 @@
 {
   "imports": {
     "@supabase/supabase-js": "https://esm.sh/@supabase/supabase-js@2.44.4",
-    "@google/genai": "https://esm.sh/@google/genai@1.24.0",
-    "shared/": "./_shared/"
+    "@google/genai": "https://esm.sh/@google/genai@1.24.0"
   }
 }

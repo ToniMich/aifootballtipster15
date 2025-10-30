@@ -1,4 +1,4 @@
-// supabase/functions/shared/cors.ts
+// supabase/functions/_shared/cors.ts
 
 // Standard CORS headers for all Edge Functions.
 // These headers are sent back to the browser during a preflight OPTIONS request

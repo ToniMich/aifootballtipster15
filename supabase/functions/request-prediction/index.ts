@@ -1,8 +1,8 @@
 // supabase/functions/request-prediction/index.ts
 
-import { corsHeaders } from 'shared/cors.ts'
-import { normalizeTeamName } from 'shared/teamNameNormalizer.ts'
-import { supabaseAdminClient } from 'shared/init.ts'
+import { corsHeaders } from '../_shared/cors.ts'
+import { normalizeTeamName } from '../_shared/teamNameNormalizer.ts'
+import { supabaseAdminClient } from '../_shared/init.ts'
 
 declare const Deno: any;
 
@@ -13,7 +13,8 @@ Deno.serve(async (req: Request) => {
   }
 
   try {
-    const { teamA: rawTeamA, teamB: rawTeamB, matchCategory } = await req.json()
+    // Fix: Add type definition for the JSON body to resolve property access errors.
+    const { teamA: rawTeamA, teamB: rawTeamB, matchCategory }: { teamA: string, teamB: string, matchCategory: 'men' | 'women' } = await req.json();
     const teamA = normalizeTeamName(rawTeamA)
     const teamB = normalizeTeamName(rawTeamB)
 

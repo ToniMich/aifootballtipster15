@@ -42,21 +42,13 @@ const MatchScore: React.FC<{ match: LiveMatch }> = ({ match }) => {
     );
 };
 
-interface LiveScoresProps {
-    disabled?: boolean;
-}
-
-const LiveScores: React.FC<LiveScoresProps> = ({ disabled }) => {
+const LiveScores: React.FC = () => {
     const [matches, setMatches] = useState<LiveMatch[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
 
     const fetchScores = useCallback(async () => {
-        if (disabled) {
-            setIsLoading(false);
-            return;
-        }
         setIsLoading(true);
         setError(null);
         try {
@@ -70,7 +62,7 @@ const LiveScores: React.FC<LiveScoresProps> = ({ disabled }) => {
         } finally {
             setIsLoading(false);
         }
-    }, [disabled]);
+    }, []);
     
     useEffect(() => {
         fetchScores();
@@ -95,8 +87,7 @@ const LiveScores: React.FC<LiveScoresProps> = ({ disabled }) => {
                     <p className="text-xs text-red-500 dark:text-red-400/80 mb-3">{error.replace('Failed to invoke Edge Function. Does the Edge Function exist?', 'The live scores service is currently unavailable.')}</p>
                     <button
                         onClick={fetchScores}
-                        disabled={disabled}
-                        className="px-3 py-1 bg-red-100 text-red-700 dark:bg-red-900/50 dark:text-red-300 text-sm font-semibold rounded-md hover:bg-red-200 dark:hover:bg-red-900 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 dark:focus:ring-offset-gray-800 transition-colors disabled:cursor-not-allowed disabled:opacity-50"
+                        className="px-3 py-1 bg-red-100 text-red-700 dark:bg-red-900/50 dark:text-red-300 text-sm font-semibold rounded-md hover:bg-red-200 dark:hover:bg-red-900 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 dark:focus:ring-offset-gray-800 transition-colors"
                     >
                         Retry
                     </button>
@@ -127,7 +118,7 @@ const LiveScores: React.FC<LiveScoresProps> = ({ disabled }) => {
                 <div className="p-4 border-b border-gray-200 dark:border-gray-700 relative">
                     <div className="text-center">
                         <h2 className="text-xl font-bold text-gray-900 dark:text-white">Live Scores</h2>
-                        {lastUpdated && !disabled ? (
+                        {lastUpdated ? (
                             <p className="text-xs text-gray-500 dark:text-gray-400">
                                 Last updated: {lastUpdated.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                             </p>
@@ -138,7 +129,7 @@ const LiveScores: React.FC<LiveScoresProps> = ({ disabled }) => {
                     <div className="absolute top-3 right-3">
                          <button 
                             onClick={fetchScores} 
-                            disabled={isLoading || disabled}
+                            disabled={isLoading}
                             className="p-1.5 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors" 
                             aria-label="Refresh live scores"
                             title="Refresh live scores"
@@ -148,12 +139,7 @@ const LiveScores: React.FC<LiveScoresProps> = ({ disabled }) => {
                     </div>
                 </div>
                 
-                {disabled ? (
-                    <div className="p-6 text-center text-gray-500 dark:text-gray-400">
-                        <p>Live scores are unavailable.</p>
-                        <p className="text-sm">The application backend is not configured.</p>
-                    </div>
-                ) : renderContent()}
+                {renderContent()}
 
                 <div className="p-3 text-center border-t border-gray-200 dark:border-gray-700">
                     <p className="text-xs text-gray-500 dark:text-gray-400">

@@ -1,6 +1,6 @@
 // supabase/functions/gemini-predict/index.ts
 
-import { supabaseAdminClient as supabase } from 'shared/init.ts'
+import { supabaseAdminClient as supabase } from '../_shared/init.ts'
 import { GoogleGenAI, Type } from '@google/genai';
 
 // Fix for "Cannot find name 'Deno'" error in Supabase Edge Functions.

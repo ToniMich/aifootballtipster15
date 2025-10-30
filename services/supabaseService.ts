@@ -60,32 +60,22 @@ export const initializeSupabaseClient = (): Promise<void> => {
                 }
             };
 
-            const supabaseUrl = getEnvVariable('VITE_SUPABASE_URL') || getEnvVariable('SUPABASE_URL');
-            const supabaseAnonKey = getEnvVariable('VITE_SUPABASE_ANON_KEY') || getEnvVariable('SUPABASE_ANON_KEY');
+            let supabaseUrl = getEnvVariable('VITE_SUPABASE_URL') || getEnvVariable('SUPABASE_URL');
+            let supabaseAnonKey = getEnvVariable('VITE_SUPABASE_ANON_KEY') || getEnvVariable('SUPABASE_ANON_KEY');
 
             if (!isValidUrl(supabaseUrl) || !supabaseAnonKey) {
-                isPlaceholderMode = true;
-                const errorParts: string[] = [];
-                if (!supabaseUrl) {
-                    errorParts.push("SUPABASE_URL is missing.");
-                } else if (!isValidUrl(supabaseUrl)) {
-                    errorParts.push("SUPABASE_URL is not a valid HTTP/HTTPS URL.");
-                }
-                if (!supabaseAnonKey) {
-                    errorParts.push("SUPABASE_ANON_KEY is missing.");
-                }
-
-                const detailedError = `Supabase configuration failed: ${errorParts.join(' ')} The application cannot connect to its backend and will run in placeholder mode.`;
-                console.warn(detailedError);
-                
-                // Instead of rejecting, we resolve. The app will enter placeholder mode gracefully.
-                resolve();
-                return; // Stop execution
+                 console.warn(
+                    "Supabase environment variables not found or invalid. Falling back to default local development credentials for debugging. " +
+                    "Ensure your local Supabase instance is running via `supabase start`."
+                );
+                supabaseUrl = 'http://127.0.0.1:54321';
+                // This is the default, public, non-secret anon key for local Supabase development.
+                supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0';
             } 
             
-            isPlaceholderMode = false;
+            isPlaceholderMode = false; // Always attempt to connect for debugging purposes
             supabaseClient = createClient(supabaseUrl, supabaseAnonKey);
-            console.log(`Supabase client initialized successfully. Placeholder mode: ${isPlaceholderMode}`);
+            console.log(`Supabase client initialized. Using URL: ${supabaseUrl}. Placeholder mode: ${isPlaceholderMode}`);
             resolve();
         } catch (error) {
             console.error("Supabase client initialization crashed:", error);

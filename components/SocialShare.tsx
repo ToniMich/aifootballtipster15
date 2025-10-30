@@ -1,3 +1,6 @@
+// Fix: Add a triple-slash directive to include the DOM library, which defines modern browser APIs like 'navigator.clipboard'.
+/// <reference lib="dom" />
+
 import React, { useState, useMemo } from 'react';
 import { PredictionResultData } from '../types';
 import ShareButtons from './ShareButtons';

@@ -1,3 +1,6 @@
+// Fix: Add a triple-slash directive to include the DOM library, which defines global browser APIs like 'document', 'window', 'setInterval', etc.
+/// <reference lib="dom" />
+
 import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { startPredictionJob, getPredictionResult } from './services/geminiService';
 import { HistoryItem, AccuracyStats } from './types';
@@ -15,7 +18,6 @@ import PredictionHistory from './components/PredictionHistory';
 import HeaderAccuracyTracker from './components/HeaderAccuracyTracker';
 import LiveScores from './components/LiveScores';
 import TeamPerformanceTracker from './components/TeamPerformanceTracker';
-import ConfigurationWarning from './components/ConfigurationWarning';
 
 const App: React.FC = () => {
     const [teamA, setTeamA] = useState<string>('');
@@ -106,19 +108,24 @@ const App: React.FC = () => {
     };
 
     const pollForPrediction = useCallback((id: string) => {
+        console.log(`[DEBUG] App.pollForPrediction: Starting polling process for job ID: ${id}`);
         const POLLING_INTERVAL = 4000; // 4 seconds
         const POLLING_TIMEOUT = 60000; // 60 seconds
 
         clearPolling(); // Ensure no other polls are running
 
         pollIntervalId.current = window.setInterval(async () => {
+            console.log(`[DEBUG] App.pollForPrediction: Polling attempt for job ID: ${id}...`);
             try {
                 const result = await getPredictionResult(id);
+                console.log(`[DEBUG] App.pollForPrediction: Poll successful for job ID ${id}. Current status: ${result.status}`);
 
                 if (result.status && result.status !== 'processing') {
+                    console.log(`[DEBUG] App.pollForPrediction: Job ${id} is complete with status '${result.status}'. Stopping poll.`);
                     clearPolling();
                     if (result.status === 'failed') {
                         const errorMessage = result.error || 'The AI failed to generate a prediction for this match.';
+                        console.error(`[DEBUG] App.pollForPrediction: Job ${id} failed. Error: ${errorMessage}`);
                         setError(errorMessage);
                     } else {
                         setPredictionResult(result);
@@ -127,6 +134,7 @@ const App: React.FC = () => {
                     setIsLoading(false);
                 }
             } catch (err) {
+                console.error(`[DEBUG] App.pollForPrediction: Polling for job ${id} caught an error. Stopping poll.`, err);
                 clearPolling();
                 const errorMessage = err instanceof Error ? err.message : 'An unknown error occurred while polling for results.';
                 setError(errorMessage);
@@ -135,6 +143,7 @@ const App: React.FC = () => {
         }, POLLING_INTERVAL);
 
         pollTimeoutId.current = window.setTimeout(() => {
+            console.warn(`[DEBUG] App.pollForPrediction: Polling for job ${id} timed out after ${POLLING_TIMEOUT / 1000} seconds. Stopping poll.`);
             clearPolling();
             setError('The prediction is taking longer than expected. The service might be busy. Please try again in a moment.');
             setIsLoading(false);
@@ -143,6 +152,7 @@ const App: React.FC = () => {
 
 
     const handlePredict = useCallback(async () => {
+        console.log('[DEBUG] App.handlePredict: "Get AI Prediction" button clicked.');
         setIsLoading(true);
         setError(null);
         setPredictionResult(null);
@@ -152,6 +162,7 @@ const App: React.FC = () => {
         const trimmedB = teamB.trim();
         
         try {
+            console.log('[DEBUG] App.handlePredict: Validating inputs...');
             // --- Validation Block ---
             const validTeamNameRegex = /^[\p{L}0-9\s.'&()-]+$/u;
             if (!trimmedA || !trimmedB) { throw new Error('Please enter names for both teams.'); }
@@ -159,23 +170,25 @@ const App: React.FC = () => {
             if (!validTeamNameRegex.test(trimmedA) || !validTeamNameRegex.test(trimmedB)) { throw new Error("Team names can only include letters, numbers, spaces, and .'-&()"); }
             if (trimmedA.toLowerCase() === trimmedB.toLowerCase()) { throw new Error('Please enter two different team names.'); }
 
+            console.log('[DEBUG] App.handlePredict: Validation passed. Calling startPredictionJob...');
             const response = await startPredictionJob(trimmedA, trimmedB, matchCategory);
+            console.log('[DEBUG] App.handlePredict: Response from startPredictionJob:', response);
 
             if (response.isCached) {
-                console.log("[AIFootballTipster] Cached prediction found, displaying immediately.");
+                console.log("[DEBUG] App.handlePredict: Cached prediction found, displaying immediately.");
                 setPredictionResult(response.data as HistoryItem);
                 fetchHistoryAndStats(); // Refresh history to show updated tally
                 setIsLoading(false);
             } else {
                 const { jobId: newJobId } = response.data as { jobId: string };
-                console.log(`[AIFootballTipster] Started new prediction job: ${newJobId}. Starting to poll.`);
+                console.log(`[DEBUG] App.handlePredict: Started new prediction job: ${newJobId}. Starting to poll.`);
                 setJobId(newJobId);
                 pollForPrediction(newJobId);
             }
             
         } catch (err) {
             const errorMessage = err instanceof Error ? err.message : "An unknown error occurred during AI analysis.";
-            console.error(`[AIFootballTipster] Prediction request failed: ${errorMessage}`);
+            console.error(`[DEBUG] App.handlePredict: Caught an error during prediction request.`, err);
             setError(errorMessage);
             setIsLoading(false);
         }
@@ -231,7 +244,6 @@ const App: React.FC = () => {
                             <h2 className="text-center text-3xl font-bold text-gray-900 dark:text-white mb-6">
                                 The Predictor
                             </h2>
-                            {appStatus === 'ready' && !isConfigured && <ConfigurationWarning />}
                             <div className="space-y-4">
                                 <CategoryToggle selectedCategory={matchCategory} onSelectCategory={setMatchCategory} />
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -286,8 +298,8 @@ const App: React.FC = () => {
                                         <button
                                             onClick={handlePredict}
                                             className="w-full bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white font-bold py-3 px-4 rounded-lg transition-all duration-300 transform hover:scale-105 shadow-lg hover:shadow-green-500/40 focus:outline-none focus:ring-4 focus:ring-green-500/50 disabled:bg-gray-400 disabled:cursor-not-allowed disabled:transform-none disabled:shadow-none"
-                                            disabled={!teamA || !teamB || !isConfigured}
-                                            title={!isConfigured ? 'Application backend is not configured. Please check your .env.local file.' : 'Get AI Prediction'}
+                                            disabled={!teamA || !teamB}
+                                            title="Get AI Prediction"
                                         >
                                             Get AI Prediction
                                         </button>
@@ -310,24 +322,22 @@ const App: React.FC = () => {
                              </div>
                         )}
                         
-                        {isConfigured && (
-                            <PredictionHistory
-                                history={history}
-                                stats={accuracyStats}
-                                onSync={handleSyncResults}
-                                isSyncing={isSyncing}
-                                onDelete={handleDeletePrediction}
-                                onViewDetails={setSelectedHistoryItem}
-                                onViewTeamStats={setSelectedTeamForStats}
-                            />
-                        )}
+                        <PredictionHistory
+                            history={history}
+                            stats={accuracyStats}
+                            onSync={handleSyncResults}
+                            isSyncing={isSyncing}
+                            onDelete={handleDeletePrediction}
+                            onViewDetails={setSelectedHistoryItem}
+                            onViewTeamStats={setSelectedTeamForStats}
+                        />
 
                     </div>
 
                     {/* Right column: Sidebar */}
                     <div className="space-y-8 lg:col-span-1">
                         <div className="lg:sticky lg:top-28 space-y-8">
-                             <LiveScores disabled={!isConfigured} />
+                             <LiveScores />
                              <DonationBlock />
                         </div>
                     </div>
@@ -348,7 +358,7 @@ const App: React.FC = () => {
                             </h1>
                         </div>
                         <div className="flex items-center gap-2 sm:gap-4">
-                            {isConfigured && <HeaderAccuracyTracker total={accuracyStats.total} wins={accuracyStats.wins} />}
+                            <HeaderAccuracyTracker total={accuracyStats.total} wins={accuracyStats.wins} />
                             <button
                                 onClick={toggleTheme}
                                 className="p-2 rounded-full text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-green-500"
