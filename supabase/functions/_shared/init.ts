@@ -1,6 +1,7 @@
 // supabase/functions/shared/init.ts
 
 import { createClient } from '@supabase/supabase-js';
+import { load } from "https://deno.land/std@0.224.0/dotenv/mod.ts";
 
 // This file centralizes the creation of Supabase clients for Edge Functions.
 // It ensures that environment variables are checked once at startup, preventing
@@ -8,6 +9,12 @@ import { createClient } from '@supabase/supabase-js';
 
 // Fix for "Cannot find name 'Deno'" error in Supabase Edge Functions.
 declare const Deno: any;
+
+// Explicitly load environment variables from the .env file.
+// This makes the function runtime more resilient, especially in local development.
+// It searches for the .env file in the current directory and parent directories.
+// The `export: true` option makes the variables available via Deno.env.get().
+await load({ export: true });
 
 // --- Environment Variable Validation ---
 const supabaseUrl = Deno.env.get('SUPABASE_URL');

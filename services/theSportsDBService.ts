@@ -10,7 +10,7 @@ interface RawLiveMatch {
     away: string | null;
     homeScore: number | null;
     awayScore: number | null;
-    status: string | null; // e.g., "68", "HT", "Finished"
+    status: string | null; // e.g., "68", "HT", "Finished", "19:00"
 }
 
 /**
@@ -33,23 +33,35 @@ export async function fetchLiveScores(): Promise<LiveMatch[]> {
         // The array of matches is now under the `matches` key.
         const rawMatches: RawLiveMatch[] = data.matches || [];
 
-        // Map the new raw data format to the LiveMatch format expected by the UI
+        // Map the raw data to the LiveMatch format expected by the UI, handling various status texts.
         return rawMatches.map((match): LiveMatch => {
-            const displayStatus = (match.status || '').toUpperCase();
+            const rawStatus = match.status || 'Not Started';
+            const displayStatus = rawStatus.toUpperCase();
+            
             let status: LiveMatch['status'] = 'Not Started';
-            let time = match.status || 'NS'; // Default time to the status string
+            let time: string = rawStatus;
 
-            // Determine the standardized status and time for the UI
-            if (displayStatus.includes("'") || /^\d+$/.test(displayStatus) || displayStatus.includes("LIVE")) {
+            // Handle various in-progress statuses
+            if (displayStatus.includes('KICK OFF') || displayStatus.includes('1ST HALF') || displayStatus.includes('2ND HALF') || displayStatus.includes('EXTRA TIME') || displayStatus.includes('PENALTY') || displayStatus.includes('LIVE')) {
                 status = 'LIVE';
-                const minuteMatch = displayStatus.match(/\d+/); // Extract numbers
-                time = minuteMatch ? `${minuteMatch[0]}'` : 'Live';
-            } else if (displayStatus === 'HT' || displayStatus.includes('HALF')) {
+                time = 'Live';
+            } else if (displayStatus.includes('HALFTIME') || displayStatus === 'HT') {
                 status = 'HT';
                 time = 'HT';
-            } else if (displayStatus === 'FT' || displayStatus.includes('FINISHED')) {
+            } else if (displayStatus.includes('FINISHED') || displayStatus === 'FT') {
                 status = 'FT';
                 time = 'FT';
+            // Handle upcoming matches with kickoff times
+            } else if (/\d{2}:\d{2}/.test(rawStatus)) {
+                status = 'Not Started';
+                const timeMatch = rawStatus.match(/\d{2}:\d{2}/);
+                time = timeMatch ? timeMatch[0] : 'NS';
+            }
+            
+            // A special check for when the API gives a minute '##' as status
+            if (/^\d+'?$/.test(rawStatus)) {
+                status = 'LIVE';
+                time = rawStatus.endsWith("'") ? rawStatus : `${rawStatus}'`;
             }
 
             return {
@@ -62,7 +74,7 @@ export async function fetchLiveScores(): Promise<LiveMatch[]> {
                 time: time,
                 status: status,
             };
-        });
+        }).filter(match => match.status !== 'FT'); // Filter out completed matches
 
     } catch (err) {
         console.error("Error fetching live scores via Supabase function:", err);

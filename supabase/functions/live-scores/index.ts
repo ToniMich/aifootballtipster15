@@ -1,9 +1,14 @@
 // supabase/functions/live-scores/index.ts
 
 import { corsHeaders } from '../_shared/cors.ts'
+import { load } from "https://deno.land/std@0.224.0/dotenv/mod.ts";
 
 // Fix for "Cannot find name 'Deno'" error in Supabase Edge Functions.
 declare const Deno: any;
+
+// Explicitly load environment variables from the .env file.
+// This makes the function runtime more resilient, especially in local development.
+await load({ export: true });
 
 const API_TIMEOUT_MS = 8000;
 
@@ -49,7 +54,15 @@ Deno.serve(async (req: Request) => {
       throw new Error('Server configuration error: TheSportsDB API key is missing.');
     }
 
-    const upstreamUrl = `https://www.thesportsdb.com/api/v1/json/${apiKey}/livescore.php?s=Soccer`;
+    // Get today's date in YYYY-MM-DD format for the free API endpoint
+    const today = new Date();
+    const yyyy = today.getFullYear();
+    const mm = String(today.getMonth() + 1).padStart(2, '0'); // Months are 0-indexed
+    const dd = String(today.getDate()).padStart(2, '0');
+    const dateString = `${yyyy}-${mm}-${dd}`;
+
+    // FIX: Switched from premium 'livescore.php' to free 'eventsday.php' to avoid authorization errors.
+    const upstreamUrl = `https://www.thesportsdb.com/api/v1/json/${apiKey}/eventsday.php?d=${dateString}&s=Soccer`;
     
     // Create a timeout controller for the external API fetch
     const controller = new AbortController();
