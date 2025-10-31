@@ -15,6 +15,7 @@ export interface BestBet {
   overConfidence?: string; // e.g. "80%"
   underValue?: string; // e.g. "Under 2.5"
   underConfidence?: string; // e.g. "20%"
+  betStatus?: 'won' | 'lost' | 'pending';
 }
 
 // NEW: For structured H2H data
@@ -153,4 +154,11 @@ export interface TeamPerformanceStats {
   total: number;
   wins: number;
   recentOutcomes: Array<HistoryItem['status']>;
+}
+
+export interface UserBet {
+    id: string;
+    prediction_id: string;
+    chosen_bet_category: string;
+    chosen_bet_value: string;
 }

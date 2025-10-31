@@ -1,11 +1,13 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { HistoryItem, HeadToHeadStats, PlayerStat, GoalScorerPrediction } from '../types';
-import { ChartPieIcon, WarningIcon, LocationMarkerIcon, CalendarIcon, WhistleIcon, LightningBoltIcon, TableCellsIcon, TrophyIcon, AssistIcon, CardIcon } from './icons';
+import { ChartPieIcon, WarningIcon, LocationMarkerIcon, CalendarIcon, WhistleIcon, LightningBoltIcon, TableCellsIcon, TrophyIcon, AssistIcon, CardIcon, RefreshIcon } from './icons';
 import TeamLogo from './TeamLogo';
 import SocialShare from './SocialShare';
 import GoalProbabilityChart from './GoalProbabilityChart';
 import BestBetsGrid from './BestBetsGrid';
 import HeadToHeadVisual from './HeadToHeadVisual';
+import UserBettingPanel from './UserBettingPanel';
+import type { Session } from '@supabase/supabase-js';
 
 interface PredictionResultProps {
   result: HistoryItem | null;
@@ -13,6 +15,9 @@ interface PredictionResultProps {
   teamA: string;
   teamB: string;
   onViewTeamStats: (teamName: string) => void;
+  onForceRefresh: (teamA: string, teamB: string, category: 'men' | 'women') => void;
+  session: Session | null; // Add session to determine user status
+  onUpgrade: () => void;
 }
 
 // Helper function to safely render content that should be a string or number
@@ -145,7 +150,37 @@ const GoalScorerCard: React.FC<{ prediction: GoalScorerPrediction }> = ({ predic
 );
 
 
-const PredictionResult: React.FC<PredictionResultProps> = ({ result, error, teamA, teamB, onViewTeamStats }) => {
+const PredictionResult: React.FC<PredictionResultProps> = ({ result, error, teamA, teamB, onViewTeamStats, onForceRefresh, session, onUpgrade }) => {
+    const [showRefreshButton, setShowRefreshButton] = useState(false);
+    const isProUser = !!session; 
+
+    useEffect(() => {
+        if (!result || !result.fromCache || !result.kickoffTime || typeof result.kickoffTime !== 'string' || !isProUser) {
+            setShowRefreshButton(false);
+            return;
+        }
+
+        try {
+            const parsableDateString = result.kickoffTime.replace(/ [A-Z]{3,4}$/, '');
+            const kickoffDate = new Date(parsableDateString);
+            
+            if (isNaN(kickoffDate.getTime())) {
+                setShowRefreshButton(false);
+                return;
+            }
+
+            const now = new Date();
+            const twoHours = 2 * 60 * 60 * 1000;
+            const timeDifference = kickoffDate.getTime() - now.getTime();
+
+            setShowRefreshButton(timeDifference > 0 && timeDifference <= twoHours);
+
+        } catch (e) {
+            console.error("Failed to parse kickoffTime for refresh check:", result.kickoffTime, e);
+            setShowRefreshButton(false);
+        }
+    }, [result, isProUser]);
+
     if (error) {
         return (
             <div className="p-6 bg-red-100 dark:bg-red-900/50 border border-red-400 dark:border-red-500 rounded-lg text-red-800 dark:text-red-300 animate-fade-in">
@@ -164,13 +199,8 @@ const PredictionResult: React.FC<PredictionResultProps> = ({ result, error, team
         return null;
     }
     
-    // FIX: Determine if the result's team order is swapped compared to the user's input order.
-    // `teamA` and `teamB` props come from App.tsx state, representing the user's input (Home vs Away).
-    // `result.teamA` is the team name associated with teamA-specific data fields in the database record.
-    // This handles cases where a cached prediction for "B vs A" is used for a search of "A vs B".
     const teamsAreSwapped = result.teamA !== teamA;
 
-    // Use the `teamsAreSwapped` flag to select the correct data for the Home (A) and Away (B) teams.
     const probA = parseInt(String(teamsAreSwapped ? result.teamB_winProbability : result.teamA_winProbability), 10) || 0;
     const probB = parseInt(String(teamsAreSwapped ? result.teamA_winProbability : result.teamB_winProbability), 10) || 0;
     const probDraw = parseInt(String(result.drawProbability), 10) || 0;
@@ -178,8 +208,6 @@ const PredictionResult: React.FC<PredictionResultProps> = ({ result, error, team
     const logoA = teamsAreSwapped ? result.teamB_logo : result.teamA_logo;
     const logoB = teamsAreSwapped ? result.teamA_logo : result.teamB_logo;
 
-    // FIX: Defensively access `keyStats` and `head_to_head` by providing default fallback objects.
-    // This prevents runtime errors if the prediction result is missing these properties (e.g., from a partial Gemini response).
     const keyStats = result.keyStats || { teamA_form: '?????', teamB_form: '?????', head_to_head: { totalMatches: 0, teamA_wins: 0, draws: 0, teamB_wins: 0, summary: 'N/A' } };
     const h2hData = keyStats.head_to_head || { totalMatches: 0, teamA_wins: 0, draws: 0, teamB_wins: 0, summary: 'N/A' };
     
@@ -194,12 +222,28 @@ const PredictionResult: React.FC<PredictionResultProps> = ({ result, error, team
     
     return (
         <div className="bg-white dark:bg-gray-800/50 backdrop-blur-sm border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg animate-fade-in overflow-hidden">
+            {/* Refresh Banner */}
+            {showRefreshButton && (
+                <div className="p-3 bg-blue-50 dark:bg-blue-900/40 border-b border-blue-200 dark:border-blue-800 animate-fade-in">
+                    <div className="flex flex-col sm:flex-row items-center justify-center text-center sm:text-left gap-2 sm:gap-4">
+                        <p className="text-sm text-blue-800 dark:text-blue-200">
+                            <span className="font-semibold">Game Day!</span> Lineups may have changed. Get the latest analysis.
+                        </p>
+                        <button
+                            onClick={() => onForceRefresh(teamA, teamB, result.matchCategory)}
+                            className="flex items-center gap-2 px-3 py-1.5 text-sm font-semibold bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors shadow-sm flex-shrink-0"
+                        >
+                            <RefreshIcon className="h-4 w-4" />
+                            Refresh Analysis
+                        </button>
+                    </div>
+                </div>
+            )}
+            
             {/* Header */}
             <div className="p-6 bg-gray-50 dark:bg-gray-900/50 border-b border-gray-200 dark:border-gray-700">
                 <div className="space-y-4">
-                    {/* Team Info - RE-ENGINEERED WITH CSS GRID */}
                     <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-4 text-center">
-                        {/* Team A */}
                         <div className="flex flex-col items-center justify-start gap-3 min-w-0">
                             <TeamLogo logoUrl={logoA} teamName={String(teamA)} sizeClass="h-16 w-16" />
                             <h3 
@@ -211,10 +255,8 @@ const PredictionResult: React.FC<PredictionResultProps> = ({ result, error, team
                             </h3>
                         </div>
                         
-                        {/* VS Separator */}
                         <span className="text-2xl font-light text-gray-400 dark:text-gray-500">vs</span>
 
-                        {/* Team B */}
                         <div className="flex flex-col items-center justify-start gap-3 min-w-0">
                             <TeamLogo logoUrl={logoB} teamName={String(teamB)} sizeClass="h-16 w-16" />
                             <h3 
@@ -227,7 +269,6 @@ const PredictionResult: React.FC<PredictionResultProps> = ({ result, error, team
                         </div>
                     </div>
 
-                    {/* Probability Bar */}
                     <div>
                         <div className="flex justify-between items-center text-sm font-semibold text-gray-800 dark:text-gray-200 px-1 mb-1">
                             <span style={{ width: `${probA}%` }} className="text-center">{probA}%</span>
@@ -265,7 +306,6 @@ const PredictionResult: React.FC<PredictionResultProps> = ({ result, error, team
 
             {/* Body */}
             <div className="p-6 space-y-8">
-                {/* Prediction & Main Bet */}
                 <section>
                     <div className="text-center">
                         <p className="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">AI Prediction</p>
@@ -274,10 +314,10 @@ const PredictionResult: React.FC<PredictionResultProps> = ({ result, error, team
                     </div>
                 </section>
                 
-                {/* Visual Best Bets Grid */}
                 <BestBetsGrid result={result} teamA={teamA} teamB={teamB} />
 
-                {/* Key Stats */}
+                {isProUser && <UserBettingPanel prediction={result} />}
+
                 {result.keyStats && (
                     <section>
                          <div className="flex items-center gap-3 mb-4">
@@ -309,18 +349,27 @@ const PredictionResult: React.FC<PredictionResultProps> = ({ result, error, team
                     </section>
                 )}
                 
-                {/* Analyst's Breakdown (Moved Down) */}
                 <section>
-                     <div className="p-4 bg-gray-50 dark:bg-gray-900/50 rounded-lg">
+                     <div className="relative p-4 bg-gray-50 dark:bg-gray-900/50 rounded-lg">
                         <h4 className="font-bold text-gray-800 dark:text-white mb-2">Analyst's Breakdown</h4>
-                        <p className="text-gray-700 dark:text-gray-300 text-base leading-relaxed">{renderSafely(result.analysis, 'Analysis not available.')}</p>
+                        <p className={`text-gray-700 dark:text-gray-300 text-base leading-relaxed ${!isProUser ? 'blur-sm select-none' : ''}`}>{renderSafely(result.analysis, 'Analysis not available.')}</p>
+                        {!isProUser && (
+                            <div className="absolute inset-0 flex flex-col justify-center items-center bg-white/70 dark:bg-gray-900/80 backdrop-blur-sm rounded-lg">
+                                <p className="font-bold text-lg text-gray-800 dark:text-white">This is a Pro Feature</p>
+                                <p className="text-sm text-gray-600 dark:text-gray-300 mb-3">Unlock the full analysis and more.</p>
+                                <button 
+                                    onClick={onUpgrade}
+                                    className="px-4 py-2 bg-green-600 text-white font-semibold rounded-lg shadow-md hover:bg-green-700 transition-colors"
+                                >
+                                    Upgrade to Pro
+                                </button>
+                            </div>
+                        )}
                     </div>
                 </section>
 
-                {/* Goal Probabilities */}
                 {result.goalProbabilities && <GoalProbabilityChart probabilities={result.goalProbabilities} />}
 
-                {/* Player Impact */}
                  {(result.playerStats || result.goalScorerPredictions) && (
                     <section>
                          <div className="flex items-center gap-3 mb-4">
@@ -348,7 +397,6 @@ const PredictionResult: React.FC<PredictionResultProps> = ({ result, error, team
                     </section>
                 )}
                 
-                {/* Availability */}
                 {result.availabilityFactors && (
                     <div className="p-4 bg-gray-50 dark:bg-gray-900/50 rounded-lg">
                         <h4 className="font-bold text-gray-800 dark:text-white mb-2">Availability Factors</h4>
@@ -356,7 +404,6 @@ const PredictionResult: React.FC<PredictionResultProps> = ({ result, error, team
                     </div>
                 )}
                 
-                {/* Sources */}
                 {result.sources && result.sources.length > 0 && (
                     <div>
                         <h4 className="text-sm font-semibold text-gray-600 dark:text-gray-400 mb-2">Sources</h4>

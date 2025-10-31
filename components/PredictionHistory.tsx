@@ -2,7 +2,7 @@ import React from 'react';
 import { HistoryItem, AccuracyStats } from '../types';
 import AccuracyTracker from './AccuracyTracker';
 import TeamLogo from './TeamLogo';
-import { RefreshIcon, TrashIcon, FootballIcon, XMarkIcon } from './icons';
+import { RefreshIcon, TrashIcon, FootballIcon } from './icons';
 
 interface PredictionHistoryProps {
     history: HistoryItem[];
@@ -37,13 +37,13 @@ const StatusBadge: React.FC<{ status: HistoryItem['status'] }> = ({ status }) =>
 const PredictionHistory: React.FC<PredictionHistoryProps> = ({ history, stats, onSync, isSyncing, onDelete, onViewDetails, onViewTeamStats }) => {
     return (
         <div className="w-full space-y-8">
-            <AccuracyTracker total={stats.total} wins={stats.wins} />
+            <AccuracyTracker total={stats.total} wins={stats.wins} isPersonalized={true} />
 
             <div className="bg-white dark:bg-gray-800/50 backdrop-blur-sm border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg animate-fade-in">
                 <div className="p-4 sm:p-6 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center">
                     <div className="flex items-center gap-3">
                         <FootballIcon className="h-7 w-7 text-green-600 dark:text-green-300" />
-                        <h3 className="text-2xl font-bold text-gray-900 dark:text-white">Prediction History</h3>
+                        <h3 className="text-2xl font-bold text-gray-900 dark:text-white">My Prediction History</h3>
                     </div>
                     <button
                         onClick={onSync}
@@ -58,8 +58,8 @@ const PredictionHistory: React.FC<PredictionHistoryProps> = ({ history, stats, o
                 
                 {history.length === 0 ? (
                     <div className="p-10 text-center text-gray-500 dark:text-gray-400">
-                        <p>No predictions have been made yet.</p>
-                        <p className="text-sm">Use the predictor above to get your first AI analysis!</p>
+                        <p>You haven't made any predictions yet.</p>
+                        <p className="text-sm">Use the predictor above to build your history!</p>
                     </div>
                 ) : (
                     <div className="divide-y divide-gray-200 dark:divide-gray-700">

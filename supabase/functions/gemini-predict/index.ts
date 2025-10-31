@@ -125,46 +125,69 @@ Deno.serve(async (req: Request) => {
         const { teamA, teamB, matchCategory } = body;
         const ai = new GoogleGenAI({ apiKey: geminiApiKey });
 
-        const prompt = `You are a world-class football analyst. Your primary task is to provide a detailed, data-driven analysis for the upcoming ${matchCategory}'s soccer match between ${teamA} and ${teamB}.
+        // --- STEP 1: Research Call ---
+        const researchPrompt = `You are a world-class football analyst. Your task is to gather comprehensive, up-to-date information for the upcoming ${matchCategory}'s soccer match between ${teamA} and ${teamB}.
 
 **CRITICAL INSTRUCTIONS:**
-1.  **Use Google Search:** You MUST use Google Search to find the absolute latest team news, match schedules, player statuses, and statistics. Do not rely on old, internal knowledge.
-2.  **Current Context:** The current year is ${new Date().getFullYear()}. All analysis, including match dates and league seasons, must be for the present or near future. Do not use data from previous years unless for historical context.
-3.  **Verify Player Transfers & Availability:** Search for the most recent transfer data and player availability. Check for confirmed injuries and suspensions. **Exercise extreme caution with sensitive player status information; double-check all sources before reporting.**
-4.  **Exclude Unavailable Players:** Players confirmed to be unavailable for the match MUST NOT be included in the 'playerStats' or 'goalScorerPredictions' lists.
-5.  **Analyze Absences:** The impact of player absences MUST be discussed in the 'analysis' and 'availabilityFactors' sections, explaining how it affects team strategy.
-6.  **Ensure Data Consistency:** The sum of win/draw probabilities must equal 100%. The sum of BTTS probabilities must equal 100%. The sum of Over/Under 2.5 probabilities must equal 100%.
+1.  **Use Google Search:** You MUST use Google Search to find the absolute latest information.
+2.  **Current Context:** The current year is ${new Date().getFullYear()}. All information must be for the present or near future.
+3.  **Gather Comprehensive Data:** Collect the following details:
+    *   Team form (last 5-6 matches).
+    *   Head-to-head history (last 5-10 matches).
+    *   Key player statistics (goals, assists, cards for 2-3 important players per team).
+    *   Player availability (injuries, suspensions). Exclude unavailable players from stats.
+    *   Match context (league name, table positions, importance of the match, rivalries).
+    *   Match details (venue, kickoff time, referee if available).
+4.  **Synthesize Findings:** Based on your research, provide a detailed analysis of the match dynamics, tactical outlook, and likely outcome. Propose a final prediction, win/draw/loss probabilities, and several "best bet" ideas with confidence levels. Also predict likely goalscorers, goal totals (0-1, 2-3, 4+), BTTS, and Over/Under 2.5 probabilities.
 
-Your response MUST be a single, valid JSON object that strictly adheres to the following JSON schema. Do not include any text, markdown formatting (like \`\`\`json\`), or any other content outside of the JSON object itself.
+Return your findings as a detailed text block. Do not use JSON format for this step.`;
 
-**JSON Schema:**
-${JSON.stringify(predictionSchema, null, 2)}
-`;
-
-        const response = await ai.models.generateContent({
+        const researchResult = await ai.models.generateContent({
             model: "gemini-2.5-flash",
-            contents: prompt,
+            contents: researchPrompt,
             config: {
-                tools: [{googleSearch: {}}],
+                tools: [{ googleSearch: {} }],
             },
         });
+
+        const analysisText = researchResult.text;
+        if (!analysisText) {
+            throw new Error("AI failed to gather information in the research step. The response was empty.");
+        }
+        const sources = researchResult.candidates?.[0]?.groundingMetadata?.groundingChunks || [];
+
+        // --- STEP 2: Formatting Call ---
+        const formattingPrompt = `Based *only* on the following football match analysis, your task is to populate the provided JSON schema. Do not add any new information or search for more data. Adhere strictly to the data provided in the text.
+
+**Analysis Text:**
+---
+${analysisText}
+---
+
+**Task:** Fill out the JSON object according to the schema.`;
         
-        const predictionText = response.text;
+        const formatResponse = await ai.models.generateContent({
+            model: "gemini-2.5-flash",
+            contents: formattingPrompt,
+            config: {
+                responseMimeType: "application/json",
+                responseSchema: predictionSchema,
+            },
+        });
+
+        const predictionText = formatResponse.text;
         if (!predictionText) {
-             const safetyFeedback = response.candidates?.[0]?.safetyRatings;
+             const safetyFeedback = formatResponse.candidates?.[0]?.safetyRatings;
              if (safetyFeedback?.some(r => r.blocked)) {
-                 throw new Error("[Content Filtered] The analysis was blocked due to safety filters. Please try a different match.");
+                 throw new Error("[Content Filtered] The analysis was blocked due to safety filters during the formatting step.");
              }
-            throw new Error("[Invalid Response] The AI returned an empty or malformed response.");
+            throw new Error("[Invalid Response] The AI failed to format the analysis into JSON.");
         }
 
-        // Robust parsing: remove markdown backticks before parsing
-        const cleanedText = predictionText.replace(/^```json\s*|```$/g, '').trim();
-        let predictionData = JSON.parse(cleanedText);
-        
-        // Add sources from grounding
-        predictionData.sources = response.candidates?.[0]?.groundingMetadata?.groundingChunks || [];
+        let predictionData = JSON.parse(predictionText);
+        predictionData.sources = sources; // Add the sources from the first call
 
+        // --- STEP 3: Update Database ---
         const { error: updateError } = await supabase
             .from('predictions')
             .update({ prediction_data: predictionData, status: 'pending' })

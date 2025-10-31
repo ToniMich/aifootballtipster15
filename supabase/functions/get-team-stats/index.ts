@@ -3,6 +3,7 @@
 import { corsHeaders } from '../shared/cors.ts'
 import { normalizeTeamName } from '../shared/teamNameNormalizer.ts'
 import { supabaseAdminClient as supabase } from '../shared/init.ts'
+import { HistoryItem } from '../../../types.ts';
 
 declare const Deno: any;
 
@@ -40,41 +41,12 @@ Deno.serve(async (req: Request) => {
         });
     }
 
-    let wins = 0;
-    // The query is already ordered by created_at descending
-    const recentOutcomes = predictions.slice(0, 5).map(p => {
-        // Determine if the prediction was a win FOR this team.
-        const predictionText = p.prediction_data?.prediction?.toLowerCase() || '';
-        const wasPredictedToWin = predictionText.includes(normalizedTeamName.toLowerCase()) && predictionText.includes('win');
-        
-        if (p.status === 'won' && wasPredictedToWin) {
-            return 'won';
-        }
-        if (p.status === 'lost' && !wasPredictedToWin) {
-            // This case is tricky. A "loss" status could be a "win" for the tracker
-            // if we predicted the other team to win. For simplicity, we only count
-            // explicit "won" statuses for now. A 'lost' status on the record means
-            // the main prediction was wrong.
-            return 'lost';
-        }
-        // If the status is 'won' but we didn't predict this team to win (e.g., predicted a draw or other team), it's a loss for this team's tracker.
-        if (p.status === 'won' && !wasPredictedToWin) {
-            return 'lost';
-        }
+    // A 'won' status means the AI's prediction was correct for that match.
+    const wins = predictions.filter(p => p.status === 'won').length;
 
-        return 'lost';
-    });
-
-
-    // Calculate total wins more accurately
-    for (const p of predictions) {
-        const predictionText = p.prediction_data?.prediction?.toLowerCase() || '';
-        const wasPredictedToWin = predictionText.includes(normalizedTeamName.toLowerCase()) && predictionText.includes('win');
-        if (p.status === 'won' && wasPredictedToWin) {
-            wins++;
-        }
-    }
-
+    // The recent outcomes should simply reflect if the AI was right ('won') or wrong ('lost')
+    // for the last 5 predictions involving this team.
+    const recentOutcomes = predictions.slice(0, 5).map(p => p.status as HistoryItem['status']);
 
     const stats = {
         total: predictions.length,

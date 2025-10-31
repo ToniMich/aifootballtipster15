@@ -35,6 +35,12 @@ export const supabaseAnonClient = createClient(supabaseUrl, supabaseAnonKey, {
     auth: {
         persistSession: false,
     },
+    // FIX: Add global headers to ensure authentication is passed in server-side requests.
+    global: {
+        headers: {
+            Authorization: `Bearer ${supabaseAnonKey}`
+        }
+    }
 });
 
 /**
@@ -49,4 +55,13 @@ export const supabaseAdminClient = createClient(supabaseUrl, serviceRoleKey, {
         autoRefreshToken: false,
         detectSessionInUrl: false,
     },
+    // FIX: Add global headers to ensure function-to-function invocations are authenticated.
+    // This resolves errors by preventing the `request-prediction`
+    // function from crashing when it fails to invoke the `gemini-predict` function due to
+    // a missing authorization header.
+    global: {
+        headers: {
+            Authorization: `Bearer ${serviceRoleKey}`
+        }
+    }
 });

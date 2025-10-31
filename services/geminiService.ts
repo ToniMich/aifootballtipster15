@@ -1,4 +1,4 @@
-import { getSupabaseClient, isAppConfigured, mapPredictionToHistoryItem } from './supabaseService';
+import { getSupabaseClient, isAppConfigured, mapPredictionToHistoryItem, getSession } from './supabaseService';
 import { HistoryItem, RawPrediction } from '../types';
 
 interface StartJobResponse {
@@ -13,22 +13,38 @@ interface StartJobResponse {
  * @param {string} teamA - The name of the first team.
  * @param {string} teamB - The name of the second team.
  * @param {'men' | 'women'} matchCategory - The category of the match.
+ * @param {boolean} [forceRefresh=false] - If true, bypasses the cache and forces a new prediction.
  * @returns {Promise<StartJobResponse>} A promise that resolves to the job start response.
  */
-export async function startPredictionJob(teamA: string, teamB: string, matchCategory: 'men' | 'women'): Promise<StartJobResponse> {
-    console.log(`[DEBUG] geminiService.startPredictionJob: Initiating job for ${teamA} vs ${teamB} (${matchCategory})`);
+export async function startPredictionJob(teamA: string, teamB: string, matchCategory: 'men' | 'women', forceRefresh = false): Promise<StartJobResponse> {
+    console.log(`[DEBUG] geminiService.startPredictionJob: Initiating job for ${teamA} vs ${teamB} (${matchCategory}), forceRefresh: ${forceRefresh}`);
     if (!isAppConfigured()) {
         throw new Error("Cannot connect to our service. The application backend is not configured.");
     }
     const supabase = await getSupabaseClient();
+    const session = await getSession();
+    const token = session?.access_token;
+
+    if (!token) {
+        throw new Error("Authentication required. Please log in to get a prediction.");
+    }
     
     console.log('[DEBUG] geminiService.startPredictionJob: Invoking "request-prediction" Edge Function...');
     const { data, error } = await supabase.functions.invoke('request-prediction', {
-        body: { teamA, teamB, matchCategory },
+        headers: {
+            Authorization: `Bearer ${token}`,
+        },
+        body: { teamA, teamB, matchCategory, forceRefresh },
     });
 
     if (error) {
         console.error('[DEBUG] geminiService.startPredictionJob: Received ERROR from "request-prediction" function.', error);
+        
+        // Check for specific error message from the function related to usage limits
+        if (error.context?.body?.error?.includes("Usage limit reached")) {
+             throw new Error("Usage limit reached. Please upgrade to Pro for unlimited predictions.");
+        }
+
         const errorMessage = error.message.includes('Failed to fetch') 
             ? 'The prediction service is currently unavailable. Please try again later.'
             : error.message;

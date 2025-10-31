@@ -4,12 +4,12 @@
 import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { startPredictionJob, getPredictionResult } from './services/geminiService';
 import { HistoryItem, AccuracyStats } from './types';
-import { initializeSupabaseClient, isAppConfigured, getPredictionHistory, getAccuracyStats, deletePrediction } from './services/supabaseService';
+import { initializeSupabaseClient, isAppConfigured, getPredictionHistory, getAccuracyStats, deletePrediction, getSession, onAuthStateChange, signOut, getSupabaseClient } from './services/supabaseService';
 import { syncPredictionStatuses } from './services/syncService';
 import { getTheme, setTheme as saveTheme } from './services/localStorageService';
 import Loader from './components/Loader';
 import PredictionResult from './components/PredictionResult';
-import { FTLogoIcon, SunIcon, MoonIcon, XMarkIcon } from './components/icons';
+import { FTLogoIcon, SunIcon, MoonIcon } from './components/icons';
 import TeamInput from './components/TeamInput';
 import DonationBlock from './components/DonationBlock';
 import CategoryToggle from './components/CategoryToggle';
@@ -18,6 +18,8 @@ import PredictionHistory from './components/PredictionHistory';
 import HeaderAccuracyTracker from './components/HeaderAccuracyTracker';
 import LiveScores from './components/LiveScores';
 import TeamPerformanceTracker from './components/TeamPerformanceTracker';
+import AuthModal from './components/AuthModal';
+import type { Session } from '@supabase/supabase-js';
 
 const App: React.FC = () => {
     const [teamA, setTeamA] = useState<string>('');
@@ -35,7 +37,9 @@ const App: React.FC = () => {
     const [selectedHistoryItem, setSelectedHistoryItem] = useState<HistoryItem | null>(null);
     const [selectedTeamForStats, setSelectedTeamForStats] = useState<string | null>(null);
     const [isSyncing, setIsSyncing] = useState<boolean>(false);
-    
+    const [session, setSession] = useState<Session | null>(null);
+    const [showAuthModal, setShowAuthModal] = useState<boolean>(false);
+
     const pollIntervalId = useRef<number | null>(null);
     const pollTimeoutId = useRef<number | null>(null);
 
@@ -51,6 +55,8 @@ const App: React.FC = () => {
     }, []);
 
     useEffect(() => {
+        let authSubscription: { unsubscribe: () => void; } | null = null;
+
         const initializeApp = async () => {
             try {
                 await initializeSupabaseClient();
@@ -58,7 +64,25 @@ const App: React.FC = () => {
                 setIsConfigured(configured);
                 
                 if (configured) {
-                    await fetchHistoryAndStats();
+                    const currentSession = await getSession();
+                    setSession(currentSession);
+                    
+                    if (currentSession) {
+                        await fetchHistoryAndStats();
+                    }
+
+                    const { subscription } = onAuthStateChange((_event, session) => {
+                        setSession(session);
+                        if (session) {
+                            fetchHistoryAndStats();
+                            setShowAuthModal(false); // Close modal on successful login/signup
+                        } else {
+                            setHistory([]);
+                            setAccuracyStats({ total: 0, wins: 0 });
+                        }
+                    });
+                    authSubscription = subscription;
+
                 } else {
                      console.warn("Application backend is not configured. Features like predictions and live scores will be unavailable.");
                 }
@@ -71,6 +95,11 @@ const App: React.FC = () => {
         };
 
         initializeApp();
+
+        return () => {
+            authSubscription?.unsubscribe();
+        };
+
     }, [fetchHistoryAndStats]);
 
     useEffect(() => {
@@ -152,6 +181,11 @@ const App: React.FC = () => {
 
 
     const handlePredict = useCallback(async () => {
+        if (!session) {
+            setShowAuthModal(true);
+            return;
+        }
+
         console.log('[DEBUG] App.handlePredict: "Get AI Prediction" button clicked.');
         setIsLoading(true);
         setError(null);
@@ -189,11 +223,58 @@ const App: React.FC = () => {
         } catch (err) {
             const errorMessage = err instanceof Error ? err.message : "An unknown error occurred during AI analysis.";
             console.error(`[DEBUG] App.handlePredict: Caught an error during prediction request.`, err);
+            // Handle specific error for usage limit
+            if (errorMessage.includes("Usage limit reached")) {
+                setError("You've reached your monthly prediction limit. Please upgrade to Pro for unlimited predictions.");
+                // Here you could trigger an upgrade modal
+            } else {
+                setError(errorMessage);
+            }
+            setIsLoading(false);
+        }
+    }, [teamA, teamB, matchCategory, pollForPrediction, fetchHistoryAndStats, session]);
+    
+    const handleForceRefresh = useCallback(async (teamA: string, teamB: string, category: 'men' | 'women') => {
+        if (!session) {
+            setShowAuthModal(true);
+            return;
+        }
+
+        console.log(`[DEBUG] App.handleForceRefresh: Forcing refresh for ${teamA} vs ${teamB}`);
+        setIsLoading(true);
+        setError(null);
+        setPredictionResult(null);
+        setJobId(null);
+        if (selectedHistoryItem) setSelectedHistoryItem(null); // Close modal if open
+
+        // Update main state so the UI reflects the teams being processed
+        setTeamA(teamA);
+        setTeamB(teamB);
+        setMatchCategory(category);
+
+        try {
+            // Call startPredictionJob with the forceRefresh flag set to true
+            const response = await startPredictionJob(teamA, teamB, category, true);
+            console.log('[DEBUG] App.handleForceRefresh: Response from startPredictionJob:', response);
+
+            if (response.isCached) {
+                console.warn("[DEBUG] App.handleForceRefresh: Received cached result despite forcing refresh. This should not happen. Displaying it anyway.");
+                setPredictionResult(response.data as HistoryItem);
+                setIsLoading(false);
+            } else {
+                const { jobId: newJobId } = response.data as { jobId: string };
+                console.log(`[DEBUG] App.handleForceRefresh: Started new job: ${newJobId}. Polling.`);
+                setJobId(newJobId);
+                pollForPrediction(newJobId);
+            }
+        } catch (err) {
+            const errorMessage = err instanceof Error ? err.message : "An unknown error occurred during the refresh request.";
+            console.error(`[DEBUG] App.handleForceRefresh: Caught an error.`, err);
             setError(errorMessage);
             setIsLoading(false);
         }
-    }, [teamA, teamB, matchCategory, pollForPrediction, fetchHistoryAndStats]);
-    
+    }, [pollForPrediction, selectedHistoryItem, session]);
+
     const handleSyncResults = useCallback(async () => {
         setIsSyncing(true);
         try {
@@ -299,9 +380,9 @@ const App: React.FC = () => {
                                             onClick={handlePredict}
                                             className="w-full bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white font-bold py-3 px-4 rounded-lg transition-all duration-300 transform hover:scale-105 shadow-lg hover:shadow-green-500/40 focus:outline-none focus:ring-4 focus:ring-green-500/50 disabled:bg-gray-400 disabled:cursor-not-allowed disabled:transform-none disabled:shadow-none"
                                             disabled={!teamA || !teamB}
-                                            title="Get AI Prediction"
+                                            title={!session ? "Login to get your FREE prediction" : "Get AI Prediction"}
                                         >
-                                            Get AI Prediction
+                                            {!session ? 'Login to Get FREE Prediction' : 'Get AI Prediction'}
                                         </button>
                                     )}
                                 </div>
@@ -318,19 +399,24 @@ const App: React.FC = () => {
                                     teamA={teamA} 
                                     teamB={teamB}
                                     onViewTeamStats={setSelectedTeamForStats}
+                                    onForceRefresh={handleForceRefresh}
+                                    session={session}
+                                    onUpgrade={() => setShowAuthModal(true)}
                                 />
                              </div>
                         )}
                         
-                        <PredictionHistory
-                            history={history}
-                            stats={accuracyStats}
-                            onSync={handleSyncResults}
-                            isSyncing={isSyncing}
-                            onDelete={handleDeletePrediction}
-                            onViewDetails={setSelectedHistoryItem}
-                            onViewTeamStats={setSelectedTeamForStats}
-                        />
+                        {session && (
+                            <PredictionHistory
+                                history={history}
+                                stats={accuracyStats}
+                                onSync={handleSyncResults}
+                                isSyncing={isSyncing}
+                                onDelete={handleDeletePrediction}
+                                onViewDetails={setSelectedHistoryItem}
+                                onViewTeamStats={setSelectedTeamForStats}
+                            />
+                        )}
 
                     </div>
 
@@ -358,7 +444,16 @@ const App: React.FC = () => {
                             </h1>
                         </div>
                         <div className="flex items-center gap-2 sm:gap-4">
-                            <HeaderAccuracyTracker total={accuracyStats.total} wins={accuracyStats.wins} />
+                            {session && <HeaderAccuracyTracker total={accuracyStats.total} wins={accuracyStats.wins} />}
+                            {session ? (
+                                <button onClick={() => signOut()} className="px-4 py-2 text-sm font-semibold bg-gray-200 dark:bg-gray-700 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors">
+                                    Logout
+                                </button>
+                            ) : (
+                                <button onClick={() => setShowAuthModal(true)} className="px-4 py-2 text-sm font-semibold bg-green-500 hover:bg-green-600 text-white rounded-lg transition-colors">
+                                    Login / Sign Up
+                                </button>
+                            )}
                             <button
                                 onClick={toggleTheme}
                                 className="p-2 rounded-full text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-green-500"
@@ -393,6 +488,9 @@ const App: React.FC = () => {
                             teamA={selectedHistoryItem.teamA} 
                             teamB={selectedHistoryItem.teamB}
                             onViewTeamStats={setSelectedTeamForStats}
+                            onForceRefresh={handleForceRefresh}
+                            session={session}
+                            onUpgrade={() => setShowAuthModal(true)}
                         />
                     </div>
                 </div>
@@ -414,6 +512,8 @@ const App: React.FC = () => {
                 </div>
             )}
             
+            {showAuthModal && isConfigured && <AuthModal supabaseClient={getSupabaseClient()} onClose={() => setShowAuthModal(false)} />}
+
             <Footer />
         </div>
     );

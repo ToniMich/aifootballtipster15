@@ -48,11 +48,10 @@ Deno.serve(async (req: Request) => {
   }
 
   try {
-    const apiKey = Deno.env.get('THESPORTSDB_API_KEY');
-    if (!apiKey) {
-      // This is a critical server configuration issue.
-      throw new Error('Server configuration error: TheSportsDB API key is missing.');
-    }
+    // The `eventsday.php` endpoint uses the public test API key '3' according to TheSportsDB documentation.
+    // This removes the need for users to configure a potentially incompatible free key (like '1')
+    // and makes the live scores feature work out-of-the-box.
+    const apiKey = '3';
 
     // Get today's date in YYYY-MM-DD format for the free API endpoint
     const today = new Date();
@@ -61,7 +60,7 @@ Deno.serve(async (req: Request) => {
     const dd = String(today.getDate()).padStart(2, '0');
     const dateString = `${yyyy}-${mm}-${dd}`;
 
-    // FIX: Switched from premium 'livescore.php' to free 'eventsday.php' to avoid authorization errors.
+    // Use the free 'eventsday.php' endpoint with the correct public key.
     const upstreamUrl = `https://www.thesportsdb.com/api/v1/json/${apiKey}/eventsday.php?d=${dateString}&s=Soccer`;
     
     // Create a timeout controller for the external API fetch

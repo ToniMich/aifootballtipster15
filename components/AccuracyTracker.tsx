@@ -4,9 +4,10 @@ import { ChartPieIcon, CheckCircleIcon, TicketIcon } from './icons';
 interface AccuracyTrackerProps {
     total: number;
     wins: number;
+    isPersonalized?: boolean;
 }
 
-const AccuracyTracker: React.FC<AccuracyTrackerProps> = ({ total, wins }) => {
+const AccuracyTracker: React.FC<AccuracyTrackerProps> = ({ total, wins, isPersonalized = false }) => {
     // Calculate accuracy, handling the case where total is 0 to avoid division by zero.
     const accuracy = total > 0 ? Math.round((wins / total) * 100) : 0;
 
@@ -22,7 +23,7 @@ const AccuracyTracker: React.FC<AccuracyTrackerProps> = ({ total, wins }) => {
         <div className="bg-white dark:bg-gray-800/50 backdrop-blur-sm border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg p-6 animate-fade-in">
             <div className="flex items-center gap-3 mb-4">
                 <ChartPieIcon className="h-7 w-7 text-green-600 dark:text-green-300" />
-                <h3 className="text-2xl font-bold text-gray-900 dark:text-white">AI Accuracy</h3>
+                <h3 className="text-2xl font-bold text-gray-900 dark:text-white">{isPersonalized ? "My Accuracy" : "AI Accuracy"}</h3>
             </div>
             <div className="flex items-center justify-around gap-4 text-sm text-gray-700 dark:text-gray-300">
                 <StatItem 

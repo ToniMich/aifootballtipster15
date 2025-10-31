@@ -3,6 +3,7 @@
 import { corsHeaders } from '../shared/cors.ts'
 import { normalizeTeamName } from '../shared/teamNameNormalizer.ts'
 import { supabaseAdminClient as supabase } from '../shared/init.ts'
+import { BestBet } from '../../../types.ts';
 
 // Fix for "Cannot find name 'Deno'" error in Supabase Edge Functions.
 declare const Deno: any;
@@ -13,6 +14,7 @@ interface Prediction {
     team_b: string;
     prediction_data: {
         prediction?: string;
+        bestBets?: BestBet[];
         [key: string]: any;
     };
     [key: string]: any;
@@ -35,40 +37,66 @@ const cleanLogoUrl = (url: string | null | undefined): string | null => {
     return url || null;
 };
 
-const determineOutcome = (prediction: Prediction, match: Match): 'won' | 'lost' | 'pending' => {
+const evaluateBets = (prediction: Prediction, match: Match): { mainOutcome: 'won' | 'lost', updatedBestBets: BestBet[] } => {
     const { team_a: teamA_input, team_b: teamB_input, prediction_data } = prediction;
-    const { strHomeTeam, strAwayTeam, intHomeScore, intAwayScore } = match;
+    const { strHomeTeam, intHomeScore, intAwayScore } = match;
 
-    if (intHomeScore === null || intAwayScore === null) return 'pending';
-    const homeScore = parseInt(intHomeScore, 10);
-    const awayScore = parseInt(intAwayScore, 10);
-    if (!prediction_data || !prediction_data.prediction) return 'pending';
+    const homeScore = parseInt(intHomeScore!, 10);
+    const awayScore = parseInt(intAwayScore!, 10);
+    const totalGoals = homeScore + awayScore;
     
-    const predictionText = prediction_data.prediction.toLowerCase();
     const dbTeamAIsHome = normalizeTeamName(strHomeTeam) === teamA_input;
     const teamA_score = dbTeamAIsHome ? homeScore : awayScore;
     const teamB_score = dbTeamAIsHome ? awayScore : homeScore;
-    let isWin = false;
+    
     const normalizedTeamA = teamA_input.toLowerCase();
     const normalizedTeamB = teamB_input.toLowerCase();
 
-    if (predictionText.includes(normalizedTeamA) && predictionText.includes('win')) {
-        if (teamA_score > teamB_score) isWin = true;
-    } else if (predictionText.includes(normalizedTeamB) && predictionText.includes('win')) {
-        if (teamB_score > teamA_score) isWin = true;
-    } else if (predictionText.includes('draw')) {
-        if (teamA_score === teamB_score) isWin = true;
-    } else {
-        const overUnderMatch = predictionText.match(/(over|under)\s*(\d+\.?\d*)/);
-        if (overUnderMatch) {
-            const type = overUnderMatch[1];
-            const value = parseFloat(overUnderMatch[2]);
-            const totalGoals = homeScore + awayScore;
-            if (type === 'over' && totalGoals > value) isWin = true;
-            else if (type === 'under' && totalGoals < value) isWin = true;
-        }
+    // 1. Evaluate Main Prediction
+    let mainPredictionWin = false;
+    const mainPredictionText = (prediction_data.prediction || '').toLowerCase();
+    
+    if (mainPredictionText.includes(normalizedTeamA) && mainPredictionText.includes('win')) {
+        if (teamA_score > teamB_score) mainPredictionWin = true;
+    } else if (mainPredictionText.includes(normalizedTeamB) && mainPredictionText.includes('win')) {
+        if (teamB_score > teamA_score) mainPredictionWin = true;
+    } else if (mainPredictionText.includes('draw')) {
+        if (teamA_score === teamB_score) mainPredictionWin = true;
     }
-    return isWin ? 'won' : 'lost';
+
+    // 2. Evaluate Each "Best Bet"
+    const updatedBestBets = (prediction_data.bestBets || []).map(bet => {
+        let isBetCorrect = false;
+        const betValue = bet.value.toLowerCase();
+        
+        switch (bet.category) {
+            case "Match Winner":
+                if (betValue.includes(normalizedTeamA) && teamA_score > teamB_score) isBetCorrect = true;
+                else if (betValue.includes(normalizedTeamB) && teamB_score > teamA_score) isBetCorrect = true;
+                else if (betValue.includes('draw') && teamA_score === teamB_score) isBetCorrect = true;
+                break;
+            case "Total Goals":
+            case "Over/Under":
+                const overUnderMatch = betValue.match(/(over|under)\s*(\d+\.?\d*)/);
+                if (overUnderMatch) {
+                    const type = overUnderMatch[1];
+                    const value = parseFloat(overUnderMatch[2]);
+                    if (type === 'over' && totalGoals > value) isBetCorrect = true;
+                    else if (type === 'under' && totalGoals < value) isBetCorrect = true;
+                }
+                break;
+            case "Both Teams to Score":
+                if (betValue === 'yes' && homeScore > 0 && awayScore > 0) isBetCorrect = true;
+                else if (betValue === 'no' && (homeScore === 0 || awayScore === 0)) isBetCorrect = true;
+                break;
+        }
+        return { ...bet, betStatus: isBetCorrect ? 'won' : 'lost' } as BestBet;
+    });
+
+    return {
+        mainOutcome: mainPredictionWin ? 'won' : 'lost',
+        updatedBestBets: updatedBestBets,
+    };
 };
 
 Deno.serve(async (req: Request) => {
@@ -78,10 +106,7 @@ Deno.serve(async (req: Request) => {
 
   try {
     const apiKey = Deno.env.get('THESPORTSDB_API_KEY');
-
-    if (!apiKey) {
-        throw new Error('[Configuration Error] Server configuration is incomplete.');
-    }
+    if (!apiKey) throw new Error('[Configuration Error] Server configuration is incomplete.');
 
     const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
     
@@ -117,33 +142,43 @@ Deno.serve(async (req: Request) => {
 
     const updatePromises = [];
     for (const prediction of pendingPredictions) {
-        const match = allEvents.find(e => {
-            const homeTeam = normalizeTeamName(e.strHomeTeam);
-            const awayTeam = normalizeTeamName(e.strAwayTeam);
-            return (homeTeam === prediction.team_a && awayTeam === prediction.team_b) ||
-                   (homeTeam === prediction.team_b && awayTeam === prediction.team_a);
-        });
+        const match = allEvents.find(e => 
+            e.strHomeTeam && e.strAwayTeam &&
+            ((normalizeTeamName(e.strHomeTeam) === prediction.team_a && normalizeTeamName(e.strAwayTeam) === prediction.team_b) ||
+             (normalizeTeamName(e.strHomeTeam) === prediction.team_b && normalizeTeamName(e.strAwayTeam) === prediction.team_a))
+        );
 
-        if (match && (match.strStatus === 'Match Finished' || match.strStatus === 'FT')) {
-            const newStatus = determineOutcome(prediction, match);
-            if (newStatus !== 'pending') {
-                const dbTeamAIsHome = normalizeTeamName(match.strHomeTeam) === prediction.team_a;
-                const teamA_logo = cleanLogoUrl(dbTeamAIsHome ? match.strHomeBadge : match.strAwayBadge);
-                const teamB_logo = cleanLogoUrl(dbTeamAIsHome ? match.strAwayBadge : match.strHomeBadge);
-                const updatedPredictionData = { ...(prediction.prediction_data || {}), teamA_logo, teamB_logo };
-                updatePromises.push(
-                    supabase.from('predictions').update({
-                        status: newStatus,
-                        prediction_data: updatedPredictionData
-                    }).eq('id', prediction.id)
-                );
-                updatedCount++;
-            }
+        if (match && (match.strStatus === 'Match Finished' || match.strStatus === 'FT') && match.intHomeScore !== null && match.intAwayScore !== null) {
+            const { mainOutcome, updatedBestBets } = evaluateBets(prediction, match);
+            
+            const dbTeamAIsHome = normalizeTeamName(match.strHomeTeam) === prediction.team_a;
+            const teamA_logo = cleanLogoUrl(dbTeamAIsHome ? match.strHomeBadge : match.strAwayBadge);
+            const teamB_logo = cleanLogoUrl(dbTeamAIsHome ? match.strAwayBadge : match.strHomeBadge);
+
+            const updatedPredictionData = { 
+                ...(prediction.prediction_data || {}), 
+                bestBets: updatedBestBets,
+                teamA_logo, 
+                teamB_logo 
+            };
+            
+            updatePromises.push(
+                supabase.from('predictions').update({
+                    status: mainOutcome,
+                    prediction_data: updatedPredictionData
+                }).eq('id', prediction.id)
+            );
+            updatedCount++;
         }
     }
 
     if (updatePromises.length > 0) {
-        await Promise.all(updatePromises);
+        const results = await Promise.allSettled(updatePromises);
+        results.forEach(result => {
+            if (result.status === 'rejected') {
+                console.error('Failed to update a prediction:', result.reason);
+            }
+        });
     }
 
     return new Response(JSON.stringify({ message: `Sync complete. Checked ${pendingPredictions.length} predictions and updated ${updatedCount}.` }), {
