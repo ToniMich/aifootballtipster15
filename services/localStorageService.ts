@@ -1,4 +1,5 @@
 
+
 export function getTheme(): 'light' | 'dark' {
     if (typeof window === 'undefined') {
         return 'dark';
@@ -43,6 +44,31 @@ export function setSportsDbKey(key: string): void {
             localStorage.setItem('thesportsdb_api_key', key);
         } catch (e) {
             console.error('Could not access localStorage to set API key:', e);
+        }
+    }
+}
+
+export function getSupabaseCredentials(): { url: string | null; key: string | null } {
+    if (typeof window === 'undefined') {
+        return { url: null, key: null };
+    }
+    try {
+        const url = localStorage.getItem('supabase_url');
+        const key = localStorage.getItem('supabase_anon_key');
+        return { url, key };
+    } catch (e) {
+        console.error('Could not access localStorage for Supabase credentials:', e);
+        return { url: null, key: null };
+    }
+}
+
+export function setSupabaseCredentials(url: string, key: string): void {
+    if (typeof window !== 'undefined') {
+        try {
+            localStorage.setItem('supabase_url', url);
+            localStorage.setItem('supabase_anon_key', key);
+        } catch (e) {
+            console.error('Could not access localStorage to set Supabase credentials:', e);
         }
     }
 }

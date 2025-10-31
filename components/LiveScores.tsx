@@ -84,7 +84,11 @@ const LiveScores: React.FC = () => {
                 <div className="p-4 text-center bg-red-50 dark:bg-red-900/30">
                     <WarningIcon className="h-6 w-6 text-red-500 mx-auto mb-2" />
                     <p className="font-semibold text-red-600 dark:text-red-400">Could not load scores</p>
-                    <p className="text-xs text-red-500 dark:text-red-400/80 mb-3">{error.replace('Failed to invoke Edge Function. Does the Edge Function exist?', 'The live scores service is currently unavailable.')}</p>
+                    <p className="text-xs text-red-500 dark:text-red-400/80 mb-3">
+                        {error.includes('Failed to fetch') || error.includes('Failed to send a request') 
+                            ? 'The live scores service is currently unavailable. Please check your connection and ensure the backend is running.'
+                            : error}
+                    </p>
                     <button
                         onClick={fetchScores}
                         className="px-3 py-1 bg-red-100 text-red-700 dark:bg-red-900/50 dark:text-red-300 text-sm font-semibold rounded-md hover:bg-red-200 dark:hover:bg-red-900 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 dark:focus:ring-offset-gray-800 transition-colors"

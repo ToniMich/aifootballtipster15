@@ -162,3 +162,17 @@ export interface UserBet {
     chosen_bet_category: string;
     chosen_bet_value: string;
 }
+
+export interface UserProfile {
+    id: string; // Corresponds to the user's auth ID
+    subscription_status: 'free' | 'pro';
+    monthly_prediction_count: number;
+    last_prediction_date: string;
+}
+
+export interface FeaturedMatch {
+  teamA: string;
+  teamB: string;
+  category: 'men' | 'women';
+  description: string;
+}

@@ -7,7 +7,6 @@ import GoalProbabilityChart from './GoalProbabilityChart';
 import BestBetsGrid from './BestBetsGrid';
 import HeadToHeadVisual from './HeadToHeadVisual';
 import UserBettingPanel from './UserBettingPanel';
-import type { Session } from '@supabase/supabase-js';
 
 interface PredictionResultProps {
   result: HistoryItem | null;
@@ -16,7 +15,7 @@ interface PredictionResultProps {
   teamB: string;
   onViewTeamStats: (teamName: string) => void;
   onForceRefresh: (teamA: string, teamB: string, category: 'men' | 'women') => void;
-  session: Session | null; // Add session to determine user status
+  isProUser: boolean; // Accept a boolean for pro status
   onUpgrade: () => void;
 }
 
@@ -150,9 +149,8 @@ const GoalScorerCard: React.FC<{ prediction: GoalScorerPrediction }> = ({ predic
 );
 
 
-const PredictionResult: React.FC<PredictionResultProps> = ({ result, error, teamA, teamB, onViewTeamStats, onForceRefresh, session, onUpgrade }) => {
+const PredictionResult: React.FC<PredictionResultProps> = ({ result, error, teamA, teamB, onViewTeamStats, onForceRefresh, isProUser, onUpgrade }) => {
     const [showRefreshButton, setShowRefreshButton] = useState(false);
-    const isProUser = !!session; 
 
     useEffect(() => {
         if (!result || !result.fromCache || !result.kickoffTime || typeof result.kickoffTime !== 'string' || !isProUser) {

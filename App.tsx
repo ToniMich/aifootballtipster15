@@ -1,15 +1,17 @@
+
+
 // Fix: Add a triple-slash directive to include the DOM library, which defines global browser APIs like 'document', 'window', 'setInterval', etc.
 /// <reference lib="dom" />
 
 import React, { useState, useCallback, useEffect, useRef } from 'react';
-import { startPredictionJob, getPredictionResult } from './services/geminiService';
-import { HistoryItem, AccuracyStats } from './types';
-import { initializeSupabaseClient, isAppConfigured, getPredictionHistory, getAccuracyStats, deletePrediction, getSession, onAuthStateChange, signOut, getSupabaseClient } from './services/supabaseService';
+import { getFeaturedMatchups, startPredictionJob, getPredictionResult } from './services/geminiService';
+import { HistoryItem, AccuracyStats, UserProfile, FeaturedMatch } from './types';
+import { initializeSupabaseClient, isAppConfigured, getPredictionHistory, getAccuracyStats, deletePrediction, getSession, onAuthStateChange, signOut, getSupabaseClient, getUserProfile } from './services/supabaseService';
 import { syncPredictionStatuses } from './services/syncService';
-import { getTheme, setTheme as saveTheme } from './services/localStorageService';
+import { getTheme, setTheme as saveTheme, setSupabaseCredentials } from './services/localStorageService';
 import Loader from './components/Loader';
 import PredictionResult from './components/PredictionResult';
-import { FTLogoIcon, SunIcon, MoonIcon } from './components/icons';
+import { FTLogoIcon, SunIcon, MoonIcon, UserCircleIcon, WarningIcon, FireIcon } from './components/icons';
 import TeamInput from './components/TeamInput';
 import DonationBlock from './components/DonationBlock';
 import CategoryToggle from './components/CategoryToggle';
@@ -19,7 +21,73 @@ import HeaderAccuracyTracker from './components/HeaderAccuracyTracker';
 import LiveScores from './components/LiveScores';
 import TeamPerformanceTracker from './components/TeamPerformanceTracker';
 import AuthModal from './components/AuthModal';
+import ProfileModal from './components/ProfileModal';
 import type { Session } from '@supabase/supabase-js';
+
+const ConfigurationScreen: React.FC = () => {
+    const [url, setUrl] = useState('');
+    const [key, setKey] = useState('');
+
+    const handleSave = () => {
+        if (url && key) {
+            setSupabaseCredentials(url, key);
+            window.location.reload();
+        } else {
+            alert('Please provide both a Supabase URL and Anon Key.');
+        }
+    };
+    
+    return (
+        <div className="bg-gray-50 dark:bg-gray-900 min-h-screen flex items-center justify-center p-4">
+            <div className="w-full max-w-md bg-white dark:bg-gray-800 rounded-lg shadow-2xl p-8 space-y-6">
+                <div className="text-center">
+                    <WarningIcon className="h-12 w-12 text-yellow-500 mx-auto mb-4" />
+                    <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Configuration Required</h1>
+                    <p className="text-gray-600 dark:text-gray-400 mt-2">
+                        Please provide your Supabase project credentials to continue. You can find these in your Supabase dashboard under <span className="font-mono bg-gray-200 dark:bg-gray-700 p-1 rounded-md text-xs">Project Settings &gt; API</span>.
+                    </p>
+                </div>
+                
+                <div className="space-y-4">
+                     <div>
+                        <label htmlFor="supabase-url" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Project URL</label>
+                        <input
+                            id="supabase-url"
+                            type="text"
+                            value={url}
+                            onChange={(e) => setUrl(e.target.value)}
+                            placeholder="https://your-project-ref.supabase.co"
+                            className="mt-1 w-full px-4 py-2 bg-gray-50 dark:bg-gray-900/50 border border-gray-300 dark:border-gray-600 rounded-md focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-colors"
+                        />
+                    </div>
+                     <div>
+                        <label htmlFor="supabase-key" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Anon (Public) Key</label>
+                        <input
+                            id="supabase-key"
+                            type="text"
+                            value={key}
+                            onChange={(e) => setKey(e.target.value)}
+                            placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+                            className="mt-1 w-full px-4 py-2 bg-gray-50 dark:bg-gray-900/50 border border-gray-300 dark:border-gray-600 rounded-md focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-colors"
+                        />
+                    </div>
+                </div>
+
+                <button
+                    onClick={handleSave}
+                    className="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-2.5 px-4 rounded-lg transition-colors shadow-md disabled:bg-gray-400"
+                    disabled={!url || !key}
+                >
+                    Save and Continue
+                </button>
+
+                 <p className="text-xs text-gray-500 dark:text-gray-400 text-center">
+                    Your credentials will be stored in your browser's local storage and will not be shared.
+                </p>
+            </div>
+        </div>
+    );
+};
 
 const App: React.FC = () => {
     const [teamA, setTeamA] = useState<string>('');
@@ -28,7 +96,7 @@ const App: React.FC = () => {
     const [isLoading, setIsLoading] = useState<boolean>(false);
     const [error, setError] = useState<string | null>(null);
     const [appStatus, setAppStatus] = useState<'initializing' | 'ready'>('initializing');
-    const [isConfigured, setIsConfigured] = useState<boolean>(false);
+    const [isConfigured, setIsConfigured] = useState<boolean>(true);
     const [theme, setTheme] = useState<'light' | 'dark'>(getTheme());
     const [matchCategory, setMatchCategory] = useState<'men' | 'women'>('men');
     const [jobId, setJobId] = useState<string | null>(null);
@@ -38,19 +106,28 @@ const App: React.FC = () => {
     const [selectedTeamForStats, setSelectedTeamForStats] = useState<string | null>(null);
     const [isSyncing, setIsSyncing] = useState<boolean>(false);
     const [session, setSession] = useState<Session | null>(null);
+    const [profile, setProfile] = useState<UserProfile | null>(null);
     const [showAuthModal, setShowAuthModal] = useState<boolean>(false);
+    const [showProfileModal, setShowProfileModal] = useState<boolean>(false);
+    const [featuredMatchups, setFeaturedMatchups] = useState<FeaturedMatch[]>([]);
+    const [isLoadingFeatured, setIsLoadingFeatured] = useState<boolean>(true);
 
     const pollIntervalId = useRef<number | null>(null);
     const pollTimeoutId = useRef<number | null>(null);
 
-     const fetchHistoryAndStats = useCallback(async () => {
+     const fetchUserData = useCallback(async () => {
         if (!isAppConfigured()) return;
         try {
-            const [historyData, statsData] = await Promise.all([getPredictionHistory(), getAccuracyStats()]);
+            const [historyData, statsData, profileData] = await Promise.all([
+                getPredictionHistory(), 
+                getAccuracyStats(),
+                getUserProfile()
+            ]);
             setHistory(historyData);
             setAccuracyStats(statsData);
+            setProfile(profileData);
         } catch (err) {
-            console.error("Failed to fetch history or stats:", err);
+            console.error("Failed to fetch user data:", err);
         }
     }, []);
 
@@ -68,17 +145,18 @@ const App: React.FC = () => {
                     setSession(currentSession);
                     
                     if (currentSession) {
-                        await fetchHistoryAndStats();
+                        await fetchUserData();
                     }
 
                     const { subscription } = onAuthStateChange((_event, session) => {
                         setSession(session);
                         if (session) {
-                            fetchHistoryAndStats();
+                            fetchUserData();
                             setShowAuthModal(false); // Close modal on successful login/signup
                         } else {
                             setHistory([]);
                             setAccuracyStats({ total: 0, wins: 0 });
+                            setProfile(null);
                         }
                     });
                     authSubscription = subscription;
@@ -100,7 +178,30 @@ const App: React.FC = () => {
             authSubscription?.unsubscribe();
         };
 
-    }, [fetchHistoryAndStats]);
+    }, [fetchUserData]);
+
+     useEffect(() => {
+        const fetchFeatured = async () => {
+            if (isAppConfigured()) {
+                setIsLoadingFeatured(true);
+                try {
+                    const matches = await getFeaturedMatchups();
+                    setFeaturedMatchups(matches);
+                } catch (err) {
+                    console.error("Failed to fetch featured matchups:", err);
+                    setFeaturedMatchups([]);
+                } finally {
+                    setIsLoadingFeatured(false);
+                }
+            } else {
+                setIsLoadingFeatured(false);
+            }
+        };
+
+        if (appStatus === 'ready') {
+            fetchFeatured();
+        }
+    }, [appStatus]);
 
     useEffect(() => {
         if (theme === 'dark') {
@@ -158,7 +259,7 @@ const App: React.FC = () => {
                         setError(errorMessage);
                     } else {
                         setPredictionResult(result);
-                        fetchHistoryAndStats(); // Refresh history and stats after a successful prediction
+                        fetchUserData(); // Refresh history and stats after a successful prediction
                     }
                     setIsLoading(false);
                 }
@@ -177,7 +278,7 @@ const App: React.FC = () => {
             setError('The prediction is taking longer than expected. The service might be busy. Please try again in a moment.');
             setIsLoading(false);
         }, POLLING_TIMEOUT);
-    }, [clearPolling, fetchHistoryAndStats]);
+    }, [clearPolling, fetchUserData]);
 
 
     const handlePredict = useCallback(async () => {
@@ -211,7 +312,7 @@ const App: React.FC = () => {
             if (response.isCached) {
                 console.log("[DEBUG] App.handlePredict: Cached prediction found, displaying immediately.");
                 setPredictionResult(response.data as HistoryItem);
-                fetchHistoryAndStats(); // Refresh history to show updated tally
+                fetchUserData(); // Refresh history to show updated tally
                 setIsLoading(false);
             } else {
                 const { jobId: newJobId } = response.data as { jobId: string };
@@ -232,7 +333,7 @@ const App: React.FC = () => {
             }
             setIsLoading(false);
         }
-    }, [teamA, teamB, matchCategory, pollForPrediction, fetchHistoryAndStats, session]);
+    }, [teamA, teamB, matchCategory, pollForPrediction, fetchUserData, session]);
     
     const handleForceRefresh = useCallback(async (teamA: string, teamB: string, category: 'men' | 'women') => {
         if (!session) {
@@ -279,20 +380,20 @@ const App: React.FC = () => {
         setIsSyncing(true);
         try {
             await syncPredictionStatuses();
-            await fetchHistoryAndStats();
+            await fetchUserData();
         } catch (err) {
             console.error("Sync failed:", err);
             // Optionally, show an error to the user
         } finally {
             setIsSyncing(false);
         }
-    }, [fetchHistoryAndStats]);
+    }, [fetchUserData]);
 
     const handleDeletePrediction = useCallback(async (id: string) => {
         if (window.confirm("Are you sure you want to delete this prediction from your history?")) {
             try {
                 await deletePrediction(id);
-                await fetchHistoryAndStats();
+                await fetchUserData();
                  if (predictionResult?.id === id) {
                     setPredictionResult(null);
                 }
@@ -300,13 +401,21 @@ const App: React.FC = () => {
                 console.error("Delete failed:", err);
             }
         }
-    }, [fetchHistoryAndStats, predictionResult]);
+    }, [fetchUserData, predictionResult]);
+
+    const handleSelectFeaturedMatch = (match: FeaturedMatch) => {
+        setTeamA(match.teamA);
+        setTeamB(match.teamB);
+        setMatchCategory(match.category);
+    };
 
     // Cleanup effect to stop polling if the component unmounts
     useEffect(() => {
         return () => clearPolling();
     }, [clearPolling]);
     
+    const isProUser = profile?.subscription_status === 'pro';
+
     const renderAppContent = () => {
         if (appStatus === 'initializing') {
             return (
@@ -327,7 +436,7 @@ const App: React.FC = () => {
                             </h2>
                             <div className="space-y-4">
                                 <CategoryToggle selectedCategory={matchCategory} onSelectCategory={setMatchCategory} />
-                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto_1fr] items-center gap-4">
                                     <div>
                                         <label htmlFor="teamA-input" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Home Team</label>
                                         <TeamInput
@@ -339,6 +448,7 @@ const App: React.FC = () => {
                                             className="w-full px-4 py-2 text-base bg-gray-50 dark:bg-gray-900/50 border border-gray-300 dark:border-gray-600 rounded-md focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-colors disabled:opacity-50"
                                         />
                                     </div>
+                                    <span className="text-center text-gray-400 dark:text-gray-500 font-bold text-xl mt-6 hidden sm:block">VS</span>
                                     <div>
                                         <label htmlFor="teamB-input" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Away Team</label>
                                         <TeamInput
@@ -351,6 +461,30 @@ const App: React.FC = () => {
                                         />
                                     </div>
                                 </div>
+
+                                {isLoadingFeatured ? (
+                                    <div className="text-center text-sm text-gray-500 dark:text-gray-400 pt-4">Loading hot matchups...</div>
+                                ) : featuredMatchups.length > 0 && (
+                                    <div className="pt-4 space-y-3">
+                                        <div className="flex items-center justify-center gap-2">
+                                            <FireIcon className="h-5 w-5 text-orange-500" />
+                                            <h4 className="text-center text-sm font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider">Hot Matchups</h4>
+                                        </div>
+                                        <div className="flex flex-wrap justify-center gap-2">
+                                            {featuredMatchups.map((match, index) => (
+                                                <button
+                                                    key={index}
+                                                    onClick={() => handleSelectFeaturedMatch(match)}
+                                                    className="px-3 py-2 text-sm font-medium bg-gray-100 dark:bg-gray-700/80 text-gray-800 dark:text-gray-200 rounded-lg hover:bg-green-100 dark:hover:bg-green-900/60 hover:text-green-800 dark:hover:text-green-200 transition-all duration-200 shadow-sm disabled:opacity-50"
+                                                    disabled={isLoading}
+                                                    title={match.description}
+                                                >
+                                                   {match.teamA} vs {match.teamB}
+                                                </button>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
                                 
                                 <div className="pt-2">
                                     {isLoading ? (
@@ -400,8 +534,8 @@ const App: React.FC = () => {
                                     teamB={teamB}
                                     onViewTeamStats={setSelectedTeamForStats}
                                     onForceRefresh={handleForceRefresh}
-                                    session={session}
-                                    onUpgrade={() => setShowAuthModal(true)}
+                                    isProUser={isProUser}
+                                    onUpgrade={() => setShowProfileModal(true)}
                                 />
                              </div>
                         )}
@@ -432,6 +566,10 @@ const App: React.FC = () => {
         );
     }
 
+    if (appStatus !== 'initializing' && !isConfigured) {
+        return <ConfigurationScreen />;
+    }
+
     return (
         <div className="bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100 min-h-screen transition-colors duration-300 flex flex-col">
             <header className="py-4 shadow-md bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm sticky top-0 z-40 border-b border-gray-200 dark:border-gray-700">
@@ -446,8 +584,9 @@ const App: React.FC = () => {
                         <div className="flex items-center gap-2 sm:gap-4">
                             {session && <HeaderAccuracyTracker total={accuracyStats.total} wins={accuracyStats.wins} />}
                             {session ? (
-                                <button onClick={() => signOut()} className="px-4 py-2 text-sm font-semibold bg-gray-200 dark:bg-gray-700 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors">
-                                    Logout
+                                <button onClick={() => setShowProfileModal(true)} className="flex items-center gap-2 px-3 py-2 text-sm font-semibold bg-gray-200 dark:bg-gray-700 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors" title="My Account">
+                                    <UserCircleIcon className="h-5 w-5" />
+                                    <span className="hidden sm:inline">My Account</span>
                                 </button>
                             ) : (
                                 <button onClick={() => setShowAuthModal(true)} className="px-4 py-2 text-sm font-semibold bg-green-500 hover:bg-green-600 text-white rounded-lg transition-colors">
@@ -489,8 +628,8 @@ const App: React.FC = () => {
                             teamB={selectedHistoryItem.teamB}
                             onViewTeamStats={setSelectedTeamForStats}
                             onForceRefresh={handleForceRefresh}
-                            session={session}
-                            onUpgrade={() => setShowAuthModal(true)}
+                            isProUser={isProUser}
+                            onUpgrade={() => setShowProfileModal(true)}
                         />
                     </div>
                 </div>
@@ -512,7 +651,9 @@ const App: React.FC = () => {
                 </div>
             )}
             
-            {showAuthModal && isConfigured && <AuthModal supabaseClient={getSupabaseClient()} onClose={() => setShowAuthModal(false)} />}
+            {showAuthModal && <AuthModal isConfigured={isConfigured} supabaseClient={getSupabaseClient()} onClose={() => setShowAuthModal(false)} />}
+            
+            {showProfileModal && session && <ProfileModal session={session} onClose={() => setShowProfileModal(false)} />}
 
             <Footer />
         </div>

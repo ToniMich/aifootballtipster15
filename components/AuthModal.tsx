@@ -2,21 +2,66 @@ import React from 'react';
 import { Auth } from '@supabase/auth-ui-react';
 import { ThemeSupa } from '@supabase/auth-ui-shared';
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { XMarkIcon } from './icons';
+import { XMarkIcon, WarningIcon } from './icons';
 
 interface AuthModalProps {
   supabaseClient: Promise<SupabaseClient>;
   onClose: () => void;
+  isConfigured: boolean;
 }
 
-const AuthModal: React.FC<AuthModalProps> = ({ supabaseClient, onClose }) => {
-    // This component is designed to resolve the promise internally
-    // to avoid suspense/boundary issues with the Auth component.
+const AuthModal: React.FC<AuthModalProps> = ({ supabaseClient, onClose, isConfigured }) => {
     const [client, setClient] = React.useState<SupabaseClient | null>(null);
+    const [error, setError] = React.useState<string | null>(null);
 
     React.useEffect(() => {
-        supabaseClient.then(setClient);
-    }, [supabaseClient]);
+        if (isConfigured) {
+            supabaseClient
+                .then(setClient)
+                .catch(err => {
+                    console.error("Failed to get Supabase client for auth modal:", err);
+                    setError("Could not connect to the authentication service. Please try again later.");
+                });
+        }
+    }, [supabaseClient, isConfigured]);
+
+    const renderContent = () => {
+        if (!isConfigured) {
+            return (
+                <div className="text-center">
+                    <WarningIcon className="h-12 w-12 text-yellow-500 mx-auto mb-4" />
+                    <h3 className="text-xl font-bold text-gray-800 dark:text-white">Authentication Unavailable</h3>
+                    <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
+                        This application is not connected to a backend service. Please refer to the setup instructions to configure the Supabase client.
+                    </p>
+                </div>
+            );
+        }
+
+        if (error) {
+             return (
+                <div className="text-center">
+                    <WarningIcon className="h-12 w-12 text-red-500 mx-auto mb-4" />
+                    <h3 className="text-xl font-bold text-gray-800 dark:text-white">Connection Error</h3>
+                    <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">{error}</p>
+                </div>
+            );
+        }
+
+        if (client) {
+            return (
+                <Auth
+                    supabaseClient={client}
+                    appearance={{ theme: ThemeSupa }}
+                    providers={['google', 'github']}
+                    theme={document.documentElement.classList.contains('dark') ? 'dark' : 'default'}
+                    redirectTo={window.location.origin}
+                />
+            );
+        }
+        
+        return <div className="text-center text-gray-600 dark:text-gray-400">Loading authentication...</div>;
+    };
 
     return (
         <div 
@@ -37,16 +82,7 @@ const AuthModal: React.FC<AuthModalProps> = ({ supabaseClient, onClose }) => {
                     <XMarkIcon className="h-6 w-6 text-gray-600 dark:text-gray-300" />
                 </button>
                 
-                {client ? (
-                    <Auth
-                        supabaseClient={client}
-                        appearance={{ theme: ThemeSupa }}
-                        providers={['google', 'github']}
-                        theme={document.documentElement.classList.contains('dark') ? 'dark' : 'default'}
-                    />
-                ) : (
-                    <div>Loading...</div> // Fallback while client promise resolves
-                )}
+                {renderContent()}
             </div>
         </div>
     );

@@ -1,6 +1,8 @@
+
 // services/supabaseService.ts
 import { createClient, SupabaseClient, Session, User } from '@supabase/supabase-js';
-import { HistoryItem, RawPrediction, AccuracyStats, PredictionResultData, TeamPerformanceStats, UserBet, BestBet } from '../types';
+import { HistoryItem, RawPrediction, AccuracyStats, PredictionResultData, TeamPerformanceStats, UserBet, BestBet, UserProfile } from '../types';
+import { getSupabaseCredentials } from './localStorageService';
 
 let supabaseClient: SupabaseClient | null = null;
 let isPlaceholderMode = false;
@@ -16,13 +18,9 @@ export const initializeSupabaseClient = (): Promise<void> => {
     }
 
     initializePromise = new Promise((resolve) => {
-        // Safely access Vite environment variables using optional chaining.
-        // This prevents a crash if `import.meta.env` is undefined during initialization.
-        // Fix: Use type assertion to access Vite environment variables as the 'vite/client' types could not be found.
-        const supabaseUrl = (import.meta as any).env?.VITE_SUPABASE_URL;
-        const supabaseAnonKey = (import.meta as any).env?.VITE_SUPABASE_ANON_KEY;
+        const { url: supabaseUrl, key: supabaseAnonKey } = getSupabaseCredentials();
 
-        const isValidUrl = (url: string | undefined): boolean => {
+        const isValidUrl = (url: string | undefined | null): boolean => {
             if (!url) return false;
             try {
                 new URL(url);
@@ -32,10 +30,9 @@ export const initializeSupabaseClient = (): Promise<void> => {
             }
         };
 
-        if (!isValidUrl(supabaseUrl) || !supabaseAnonKey || supabaseAnonKey.includes('your_local')) {
-            console.error(
-                "CRITICAL: Supabase environment variables are missing or invalid. " +
-                "The application will run in placeholder mode. Ensure VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY are correctly configured."
+        if (!isValidUrl(supabaseUrl) || !supabaseAnonKey) {
+            console.warn(
+                "Supabase credentials not found in localStorage. The application needs to be configured."
             );
             isPlaceholderMode = true;
             supabaseClient = null;
@@ -45,7 +42,7 @@ export const initializeSupabaseClient = (): Promise<void> => {
                 supabaseClient = createClient(supabaseUrl, supabaseAnonKey);
                 console.log("Supabase client initialized successfully.");
             } catch (error) {
-                 console.error("Supabase client creation failed despite valid-looking credentials.", error);
+                 console.error("Supabase client creation failed with provided credentials.", error);
                  isPlaceholderMode = true;
                  supabaseClient = null;
             }
@@ -102,6 +99,32 @@ export const signOut = async () => {
     }
 };
 
+/**
+ * Fetches the profile data for the currently authenticated user.
+ * @returns {Promise<UserProfile | null>} The user's profile or null if not found/logged out.
+ */
+export const getUserProfile = async (): Promise<UserProfile | null> => {
+    if (!isAppConfigured()) return null;
+
+    const supabase = await getSupabaseClient();
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session?.user) return null;
+
+    const { data, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', session.user.id)
+        .single();
+
+    if (error) {
+        // It's common for a profile to not exist immediately after signup,
+        // so we don't want to throw a hard error here. The trigger should handle it.
+        console.warn(`Could not fetch user profile: ${error.message}`);
+        return null;
+    }
+
+    return data;
+};
 
 /**
  * Safely maps a raw prediction from the database to the HistoryItem type used by the UI.

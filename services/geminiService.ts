@@ -1,5 +1,6 @@
 import { getSupabaseClient, isAppConfigured, mapPredictionToHistoryItem, getSession } from './supabaseService';
-import { HistoryItem, RawPrediction } from '../types';
+import { HistoryItem, RawPrediction, FeaturedMatch } from '../types';
+import { getSupabaseCredentials } from './localStorageService';
 
 interface StartJobResponse {
     isCached: boolean;
@@ -94,4 +95,47 @@ export async function getPredictionResult(jobId: string): Promise<HistoryItem> {
     const mappedData = mapPredictionToHistoryItem(data as RawPrediction);
     console.log(`[DEBUG] geminiService.getPredictionResult: Mapped data for job ID ${jobId}.`, mappedData);
     return mappedData;
+}
+
+/**
+ * Fetches a list of interesting, upcoming matches from the backend.
+ * @returns {Promise<FeaturedMatch[]>} A promise that resolves to an array of featured matches.
+ */
+export async function getFeaturedMatchups(): Promise<FeaturedMatch[]> {
+    console.log('[DEBUG] geminiService.getFeaturedMatchups: Fetching featured matchups...');
+    if (!isAppConfigured()) {
+        console.warn('[DEBUG] geminiService.getFeaturedMatchups: App not configured, returning empty array.');
+        return [];
+    }
+
+    const { url, key: anonKey } = getSupabaseCredentials();
+    if (!url || !anonKey) {
+        console.error('[DEBUG] geminiService.getFeaturedMatchups: Supabase credentials not found.');
+        return [];
+    }
+    
+    const functionUrl = `${url}/functions/v1/get-featured-matchups`;
+
+    try {
+        const response = await fetch(functionUrl, {
+            method: 'GET',
+            headers: {
+                'Authorization': `Bearer ${anonKey}`,
+            },
+        });
+
+        if (!response.ok) {
+            const errorText = await response.text();
+            console.error(`[DEBUG] geminiService.getFeaturedMatchups: Received non-OK response: ${response.status}`, errorText);
+            return [];
+        }
+
+        const data = await response.json();
+        console.log('[DEBUG] geminiService.getFeaturedMatchups: Received SUCCESS response from function.', data);
+        return data as FeaturedMatch[];
+
+    } catch (error) {
+        console.error('[DEBUG] geminiService.getFeaturedMatchups: fetch() call itself failed.', error);
+        return [];
+    }
 }
